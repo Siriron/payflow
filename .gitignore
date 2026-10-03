@@ -1,0 +1,14 @@
+.env
+.env.local
+.env.*.local
+node_modules/
+dist/
+.DS_Store
+.circle/
+contracts/out/
+contracts/cache/
+contracts/broadcast/
+*.log
+console.jsonl
+traces.jsonl
+arc-studio-plans/

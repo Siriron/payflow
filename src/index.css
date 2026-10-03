@@ -1,0 +1,214 @@
+@import "tailwindcss";
+
+/* ─── Google Fonts ─────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+
+/* ─── Design tokens ─────────────────────────────────────────────────────────── */
+:root {
+  /* Canvas */
+  --canvas:        #f5f4f1;
+  --bg-gradient:   #f5f4f1;
+
+  /* Ink */
+  --ink:           #0f1c2e;
+  --ink-2:         #2a3d52;
+  --muted:         #6b7a8d;
+  --subtle:        #9aaabb;
+
+  /* Surfaces */
+  --surface:       rgba(255,255,255,0.82);
+  --surface-high:  rgba(255,255,255,0.96);
+  --border:        rgba(15,28,46,0.10);
+  --border-strong: rgba(15,28,46,0.16);
+
+  /* Brand */
+  --accent:        #1461a6;
+  --accent-hover:  #105590;
+  --accent-subtle: rgba(20,97,166,0.08);
+
+  /* Semantic */
+  --success:       #1a8047;
+  --success-bg:    rgba(26,128,71,0.08);
+  --danger:        #ba2b4c;
+  --danger-bg:     rgba(186,43,76,0.07);
+  --warning:       #b45309;
+  --warning-bg:    rgba(180,83,9,0.08);
+
+  /* Spectral — used ONLY on send/confirm sheet header strip */
+  --spectral: linear-gradient(90deg, #4f8ef7 0%, #a78bfa 35%, #f472b6 65%, #fb923c 100%);
+
+  /* Spacing scale */
+  --r-sm:  12px;
+  --r-md:  18px;
+  --r-lg:  24px;
+  --r-xl:  28px;
+
+  /* Elevation */
+  --shadow-sm:  0 1px 3px rgba(15,28,46,0.07), 0 1px 2px rgba(15,28,46,0.04);
+  --shadow-md:  0 4px 16px rgba(15,28,46,0.08), 0 1px 4px rgba(15,28,46,0.05);
+  --shadow-lg:  0 16px 48px rgba(15,28,46,0.11), 0 2px 8px rgba(15,28,46,0.06);
+  --shadow-card:0 24px 64px rgba(15,28,46,0.12), 0 2px 8px rgba(15,28,46,0.06);
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────────*/
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background: var(--canvas);
+  color: var(--ink);
+  font-family: 'DM Sans', system-ui, sans-serif;
+  font-size: 15px;
+  line-height: 1.5;
+  min-height: 100dvh;
+  overflow-x: hidden;
+  padding-top: env(safe-area-inset-top);
+}
+
+/* ─── Typography utilities ───────────────────────────────────────────────────*/
+.display { font-family: 'Space Grotesk', system-ui, sans-serif; }
+.mono    { font-family: 'DM Mono', 'Menlo', monospace; }
+
+/* ─── Ambient background ─────────────────────────────────────────────────────*/
+.bg-blobs {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  overflow: hidden;
+}
+.bg-blobs::before {
+  content: '';
+  position: absolute;
+  top: -20%;
+  left: -15%;
+  width: 55%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(20,97,166,0.07) 0%, transparent 70%);
+  filter: blur(48px);
+}
+.bg-blobs::after {
+  content: '';
+  position: absolute;
+  bottom: -15%;
+  right: -10%;
+  width: 50%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(164,120,60,0.05) 0%, transparent 70%);
+  filter: blur(56px);
+}
+
+/* ─── Surface utilities ──────────────────────────────────────────────────────*/
+.glass {
+  background: var(--surface);
+  backdrop-filter: blur(24px) saturate(180%);
+  -webkit-backdrop-filter: blur(24px) saturate(180%);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-sm);
+}
+
+.glass-inner {
+  background: rgba(15,28,46,0.035);
+  border: 1px solid var(--border);
+}
+
+.glass-sheet {
+  background: var(--surface-high);
+  backdrop-filter: blur(48px) saturate(200%);
+  -webkit-backdrop-filter: blur(48px) saturate(200%);
+}
+
+/* ─── Spectral strip — ONLY for send/confirm sheet top ──────────────────────*/
+.spectral-strip {
+  height: 3px;
+  background: var(--spectral);
+  flex-shrink: 0;
+}
+
+/* ─── Button base ────────────────────────────────────────────────────────────*/
+.btn-primary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 17px 24px;
+  border-radius: var(--r-lg);
+  background: var(--accent);
+  color: #fff;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  transition: opacity 0.15s, transform 0.12s;
+  cursor: pointer;
+  border: none;
+}
+.btn-primary:hover  { opacity: 0.92; }
+.btn-primary:active { transform: scale(0.98); opacity: 0.88; }
+.btn-primary:disabled { opacity: 0.42; cursor: not-allowed; transform: none; }
+
+.btn-secondary {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 16px 24px;
+  border-radius: var(--r-lg);
+  background: rgba(15,28,46,0.055);
+  color: var(--ink);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  border: 1.5px solid var(--border);
+  transition: background 0.15s, transform 0.12s;
+  cursor: pointer;
+}
+.btn-secondary:hover  { background: rgba(15,28,46,0.08); }
+.btn-secondary:active { transform: scale(0.98); }
+
+.btn-ghost {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  color: var(--muted);
+  font-family: 'DM Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  border: none;
+  padding: 8px 12px;
+  border-radius: var(--r-sm);
+  transition: color 0.15s;
+}
+.btn-ghost:hover { color: var(--ink); }
+
+/* ─── Focus ──────────────────────────────────────────────────────────────────*/
+:focus-visible {
+  outline: 2.5px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+
+/* ─── Reduced motion ─────────────────────────────────────────────────────────*/
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ─── Toaster ────────────────────────────────────────────────────────────────*/
+[data-sonner-toaster] {
+  font-family: 'DM Sans', sans-serif !important;
+}
