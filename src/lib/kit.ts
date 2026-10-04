@@ -3,8 +3,8 @@
  * Single boundary between Payflow and @circle-fin/app-kit.
  * All CCTP details stay behind this file.
  *
- * Source chains use App Kit string identifiers (e.g. "Base_Sepolia", "Arc_Testnet").
- * Destination is always Arc or Arc_Testnet depending on ACTIVE_CHAIN.
+ * Source chains use App Kit string identifiers (e.g. "Base", "Arc").
+ * Destination is always Arc or Arc_Testnet depending on ACTIVE_ARC_CHAIN.
  */
 
 import { AppKit } from '@circle-fin/app-kit'
@@ -12,23 +12,58 @@ import { createViemAdapterFromProvider } from '@circle-fin/adapter-viem-v2'
 import type { EIP1193Provider } from 'viem'
 import { type PaymentIntent, transition, updateIntent } from './intent'
 import { parsePayflowError } from './errors'
+import { ACTIVE_ARC_CHAIN } from '../config'
 
-/** Minimal shape of the object returned by appKit.bridge() / appKit.retry() */
+// ---------------------------------------------------------------------------
+// Types
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal shape we need from a bridge result.
+ * Step names from the SDK are lowercase ('burn', 'mint', 'approve').
+ */
+interface BridgeStep {
+  name: string
+  txHash?: string
+  state?: string
+  errorMessage?: string
+  error?: unknown
+}
+
 interface BridgeKitResult {
   state: string
-  steps?: Array<{ name: string; txHash?: string }>
+  steps?: BridgeStep[]
 }
 
-/** Cast the untyped AppKit instance once at the boundary */
-interface AppKitWithBridge {
+/** Cast the AppKit instance to just what Payflow needs. */
+interface AppKitBridge {
   on: AppKit['on']
   bridge(params: unknown): Promise<BridgeKitResult>
-  retryBridge(result: unknown, params: unknown): Promise<BridgeKitResult>
+  retryBridge(result: BridgeKitResult, context: { from: unknown; to?: unknown }): Promise<BridgeKitResult>
 }
 
-// Singleton — App Kit does not need to be re-instantiated per transfer
+// ---------------------------------------------------------------------------
+// Singleton
+// ---------------------------------------------------------------------------
+
 export const appKit = new AppKit()
-const kit = appKit as unknown as AppKitWithBridge
+const kit = appKit as unknown as AppKitBridge
+
+// ---------------------------------------------------------------------------
+// In-memory result cache
+// Keeps the live BridgeKitResult object (not JSON) so retryBridge can resume
+// internal SDK state that doesn't survive serialization.
+// ---------------------------------------------------------------------------
+const liveResultCache = new Map<string, BridgeKitResult>()
+
+/** @internal — exposed for testing only */
+export function _clearResultCache(intentId: string) {
+  liveResultCache.delete(intentId)
+}
+
+// ---------------------------------------------------------------------------
+// Chain name map
+// ---------------------------------------------------------------------------
 
 /** Maps numeric chain IDs to App Kit string identifiers. */
 export const CHAIN_ID_TO_KIT_NAME: Record<number, string> = {
@@ -55,11 +90,28 @@ export function getKitChainName(chainId: number): string | null {
   return CHAIN_ID_TO_KIT_NAME[chainId] ?? null
 }
 
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/** Find a step by name, case-insensitively. */
+function findStep(steps: BridgeStep[], name: string): BridgeStep | undefined {
+  const lower = name.toLowerCase()
+  return steps.find((s) => s.name.toLowerCase() === lower)
+}
+
+/** Destination chain kit string derived from ACTIVE_ARC_CHAIN. */
+function destinationChain(): string {
+  return CHAIN_ID_TO_KIT_NAME[ACTIVE_ARC_CHAIN.id] ?? 'Arc'
+}
+
+// ---------------------------------------------------------------------------
+// Public types
+// ---------------------------------------------------------------------------
+
 export interface TransferExecutionParams {
   intent: PaymentIntent
   provider: EIP1193Provider
-  /** Whether to use Arc mainnet (true) or testnet (false) as the destination */
-  useMainnet: boolean
 }
 
 export interface TransferResult {
@@ -72,24 +124,24 @@ export interface TransferResult {
   error: string | null
 }
 
+// ---------------------------------------------------------------------------
+// executeTransfer
+// ---------------------------------------------------------------------------
+
 /**
  * Execute a CCTP bridge transfer.
- * Source chain = intent.sourceChain (App Kit string).
- * Destination = Arc / Arc_Testnet.
- * Uses Forwarding Service (useForwarder: true) — no destination wallet needed.
- * Recipient receives funds on Arc.
+ * Source chain = intent.sourceChain (App Kit string, e.g. "Base").
+ * Destination = Arc / Arc_Testnet via Forwarding Service (no destination wallet).
  */
 export async function executeTransfer(params: TransferExecutionParams): Promise<TransferResult> {
-  const { intent, provider, useMainnet } = params
-  const destinationChain = useMainnet ? 'Arc' : 'Arc_Testnet'
+  const { intent, provider } = params
 
   let updatedIntent = transition(intent, 'awaiting_signature')
 
   try {
     const adapter = await createViemAdapterFromProvider({ provider })
 
-    // One-shot handlers stored so they can be removed after bridge() returns —
-    // prevents listener accumulation on retries.
+    // One-shot event handlers — removed in the finally block.
     const onApprove = () => {
       updatedIntent = transition(updatedIntent, 'submitted')
     }
@@ -102,48 +154,48 @@ export async function executeTransfer(params: TransferExecutionParams): Promise<
       updatedIntent = transition(updatedIntent, 'settling', { sourceTxHash: txHash })
     }
 
-    ;(appKit as unknown as { on: (e: string, h: unknown) => void }).on('bridge.approve', onApprove)
-    ;(appKit as unknown as { on: (e: string, h: unknown) => void }).on('bridge.burn', onBurn)
-
-    type OffFn = (e: string, h: unknown) => void
-    const off = (appKit as unknown as { off?: OffFn; removeListener?: OffFn })
+    const kitEmitter = appKit as unknown as { on: (e: string, h: unknown) => void; off?: (e: string, h: unknown) => void; removeListener?: (e: string, h: unknown) => void }
+    kitEmitter.on('bridge.approve', onApprove)
+    kitEmitter.on('bridge.burn', onBurn)
 
     let result: BridgeKitResult
     try {
       result = await kit.bridge({
         from: { adapter, chain: intent.sourceChain },
         to: {
+          // ForwarderDestination — no adapter needed on Arc; Circle's relay mints
+          chain: destinationChain(),
           recipientAddress: intent.recipient,
-          chain: destinationChain,
           useForwarder: true,
         },
-        amount: intent.amount,
+        amount: intent.amount, // decimal string e.g. "0.01"
       })
     } finally {
-      // Always remove listeners — prevents accumulation across retries
-      try { (off.off ?? off.removeListener)?.('bridge.approve', onApprove) } catch { /* no-op */ }
-      try { (off.off ?? off.removeListener)?.('bridge.burn', onBurn) } catch { /* no-op */ }
+      try { (kitEmitter.off ?? kitEmitter.removeListener)?.('bridge.approve', onApprove) } catch { /* no-op */ }
+      try { (kitEmitter.off ?? kitEmitter.removeListener)?.('bridge.burn', onBurn) } catch { /* no-op */ }
     }
 
     const steps = result.steps ?? []
-    const burnStep = steps.find((s) => s.name === 'burn')
-    const mintStep = steps.find((s) => s.name === 'mint')
+    const burnStep = findStep(steps, 'burn')
+    const mintStep = findStep(steps, 'mint')
     const sourceTxHash: string | null = burnStep?.txHash ?? null
     const destinationTxHash: string | null = mintStep?.txHash ?? null
 
     if (result.state === 'success') {
+      liveResultCache.delete(intent.id)
       transition(updatedIntent, 'completed', {
         sourceTxHash,
         destinationTxHash,
-        bridgeResult: JSON.stringify(result),
+        bridgeResult: JSON.stringify({ state: result.state, stepsCount: steps.length }),
       })
       return { success: true, destinationTxHash, sourceTxHash, transferId: null, rawResult: result, error: null }
     } else {
-      // Soft error — may be recoverable
+      // Keep the live result in memory for retry — do NOT rely on JSON roundtrip.
+      liveResultCache.set(intent.id, result)
       transition(updatedIntent, 'recoverable', {
         sourceTxHash,
-        bridgeResult: JSON.stringify(result),
-        errorMessage: parsePayflowError(new Error(result.state)).message,
+        bridgeResult: JSON.stringify({ state: result.state, sourceTxHash }),
+        errorMessage: buildErrorMessage(result),
       })
       return {
         success: false,
@@ -151,7 +203,7 @@ export async function executeTransfer(params: TransferExecutionParams): Promise<
         sourceTxHash,
         transferId: null,
         rawResult: result,
-        error: parsePayflowError(new Error(result.state)).message,
+        error: buildErrorMessage(result),
       }
     }
   } catch (err) {
@@ -162,42 +214,76 @@ export async function executeTransfer(params: TransferExecutionParams): Promise<
   }
 }
 
+// ---------------------------------------------------------------------------
+// retryTransfer
+// ---------------------------------------------------------------------------
+
 /**
  * Retry a recoverable transfer.
- * Resumes from the failed step — never re-runs the full bridge from scratch.
+ * Uses the live in-memory BridgeKitResult when available (same session).
+ * Falls back to a full re-bridge if the session was reloaded.
  */
 export async function retryTransfer(params: TransferExecutionParams): Promise<TransferResult> {
   const { intent, provider } = params
 
-  if (!intent.bridgeResult) {
+  const liveResult = liveResultCache.get(intent.id)
+
+  // No live result and no stored source tx hash — nothing to retry.
+  if (!liveResult && !intent.sourceTxHash) {
     updateIntent(intent.id, { state: 'failed', errorMessage: 'No recoverable state found.' })
-    return { success: false, destinationTxHash: null, sourceTxHash: intent.sourceTxHash, transferId: null, rawResult: null, error: 'No recoverable state found.' }
+    return { success: false, destinationTxHash: null, sourceTxHash: null, transferId: null, rawResult: null, error: 'No recoverable state found.' }
   }
 
   let updatedIntent = transition(intent, 'settling')
 
   try {
     const adapter = await createViemAdapterFromProvider({ provider })
-    const savedResult: unknown = JSON.parse(intent.bridgeResult)
 
-    const retryResult = await kit.retryBridge(savedResult, { from: adapter, to: adapter })
+    let retryResult: BridgeKitResult
+
+    if (liveResult) {
+      // Fast path: SDK resumes from the failed step internally.
+      // ForwarderDestination retry — no destination adapter needed.
+      retryResult = await kit.retryBridge(liveResult, {
+        from: adapter,
+        to: undefined,
+      })
+    } else {
+      // Slow path: session was reloaded, live result lost.
+      // Re-execute the full bridge from scratch.
+      retryResult = await kit.bridge({
+        from: { adapter, chain: intent.sourceChain },
+        to: {
+          chain: destinationChain(),
+          recipientAddress: intent.recipient,
+          useForwarder: true,
+        },
+        amount: intent.amount,
+      })
+    }
 
     const steps = retryResult.steps ?? []
-    const mintStep = steps.find((s) => s.name === 'mint')
+    const mintStep = findStep(steps, 'mint')
     const destinationTxHash: string | null = mintStep?.txHash ?? null
 
     if (retryResult.state === 'success') {
-      transition(updatedIntent, 'completed', { destinationTxHash, bridgeResult: JSON.stringify(retryResult) })
+      liveResultCache.delete(intent.id)
+      transition(updatedIntent, 'completed', {
+        destinationTxHash,
+        bridgeResult: JSON.stringify({ state: retryResult.state }),
+      })
       return { success: true, destinationTxHash, sourceTxHash: intent.sourceTxHash, transferId: null, rawResult: retryResult, error: null }
     } else {
-      transition(updatedIntent, 'failed', { errorMessage: parsePayflowError(new Error(retryResult.state)).message })
+      // Keep updated live result for another retry attempt.
+      liveResultCache.set(intent.id, retryResult)
+      transition(updatedIntent, 'failed', { errorMessage: buildErrorMessage(retryResult) })
       return {
         success: false,
         destinationTxHash: null,
         sourceTxHash: intent.sourceTxHash,
         transferId: null,
         rawResult: retryResult,
-        error: parsePayflowError(new Error(retryResult.state)).message,
+        error: buildErrorMessage(retryResult),
       }
     }
   } catch (err) {
@@ -205,4 +291,16 @@ export async function retryTransfer(params: TransferExecutionParams): Promise<Tr
     transition(updatedIntent, 'failed', { errorMessage: message })
     return { success: false, destinationTxHash: null, sourceTxHash: intent.sourceTxHash, transferId: null, rawResult: null, error: message }
   }
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function buildErrorMessage(result: BridgeKitResult): string {
+  const steps = result.steps ?? []
+  // Find the first failed step with an error message.
+  const failedStep = steps.find((s) => s.state === 'error' && s.errorMessage)
+  if (failedStep?.errorMessage) return failedStep.errorMessage
+  return parsePayflowError(new Error(result.state)).message
 }

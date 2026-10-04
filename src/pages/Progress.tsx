@@ -6,7 +6,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Check, Circle, AlertCircle } from 'lucide-react'
 import { loadIntent, type PaymentIntent, type IntentState } from '@/lib/intent'
 import { executeTransfer, retryTransfer } from '@/lib/kit'
-import { ACTIVE_ARC_CHAIN } from '@/config'
 
 const STEPS = [
   { key: 'preparing',  label: 'Preparing' },
@@ -58,11 +57,7 @@ export default function Progress() {
         return
       }
       const fn = resuming && intent.state === 'recoverable' ? retryTransfer : executeTransfer
-      const result = await fn({
-        intent,
-        provider,
-        useMainnet: ACTIVE_ARC_CHAIN.id === 5042,
-      })
+      const result = await fn({ intent, provider })
 
       const updated = loadIntent(intent.id)
       if (updated) setIntent(updated)
