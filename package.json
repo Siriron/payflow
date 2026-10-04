@@ -1,28 +1,19 @@
 {
-  "name": "studio-app",
+  "name": "payflow",
   "private": true,
   "version": "0.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "deploy:self": "bun run ./scripts/self-deploy.ts",
-    "compass:deploy": "bun run ./scripts/compass-deploy.ts",
-    "fetch:abi": "bun run ./scripts/fetch-abi.ts",
-    "lint": "oxlint --type-aware src scripts --fix; s=$?; oxlint --fix .; exit $((s>0?s:$?))",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "oxlint --type-aware src --fix",
     "typecheck": "tsc --noEmit",
-    "check": "bash scripts/check.sh",
-    "contracts:build": "forge build",
-    "contracts:test": "forge test"
+    "check": "bun run lint && bun run typecheck"
   },
   "dependencies": {
     "@circle-fin/adapter-viem-v2": "^1.19.0",
     "@circle-fin/app-kit": "^1.16.0",
-    "@circle-fin/developer-controlled-wallets": "^10.8.0",
-    "@circle-fin/modular-wallets-core": "^1.0.16",
-    "@circle-fin/smart-contract-platform": "^10.8.0",
-    "@circle-fin/user-controlled-wallets": "^10.8.0",
-    "@circle-fin/w3s-pw-web-sdk": "^1.1.11",
-    "@openzeppelin/contracts": "5.1.0",
     "@tanstack/react-query": "^5.62.7",
     "@web3icons/react": "^4.0.0",
     "clsx": "^2.1.1",

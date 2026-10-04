@@ -1,271 +1,112 @@
 <div align="center">
 
-<br/>
+# Payflow
 
-<img src="https://img.shields.io/badge/Payflow-USDC%20Payments-22c55e?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHJ4PSI2IiBmaWxsPSIjMGYxYzJlIi8+PHBhdGggZD0iTTcgN2g1LjVhMy41IDMuNSAwIDAgMSAwIDdIN00xNSAxMmg0IiBzdHJva2U9IiNmZmYiIHN0cm9rZS13aWR0aD0iMiIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+PC9zdmc+" />
+**Send USDC. We handle the chain.**
 
-<h1>Payflow</h1>
+A non-custodial USDC payment app on [Arc](https://arc.io). Connect a browser wallet, enter an amount and a recipient, and Payflow moves your USDC from whichever supported chain you hold it on to the recipient on Arc.
 
-<p><strong>Send USDC. We handle the chain.</strong></p>
+[Live app](https://payflow-xyz.vercel.app) · [Architecture](docs/ARCHITECTURE.md) · [Payment flow](docs/PAYMENT_FLOW.md) · [Security](docs/SECURITY.md) · [Development](docs/DEVELOPMENT.md)
 
-<p>
-  A non-custodial USDC payment app built on Arc Network.<br/>
-  Connect any EVM wallet, enter an amount and a recipient — Payflow routes and settles on Arc.
-</p>
-
-<br/>
-
-<a href="https://payflow-xyz.vercel.app"><img src="https://img.shields.io/badge/Live%20App-payflow--xyz.vercel.app-22c55e?style=flat-square&logo=vercel" /></a>
-&nbsp;
-<img src="https://img.shields.io/badge/Network-Arc%20Mainnet-3b82f6?style=flat-square" />
-&nbsp;
-<img src="https://img.shields.io/badge/Asset-USDC%20only-2775ca?style=flat-square" />
-&nbsp;
-<img src="https://img.shields.io/badge/Custody-Non--custodial-f59e0b?style=flat-square" />
-&nbsp;
-<img src="https://img.shields.io/badge/License-MIT-6b7280?style=flat-square" />
-
-<br/><br/>
+![Network](https://img.shields.io/badge/Network-Arc-3b82f6?style=flat-square)
+![Asset](https://img.shields.io/badge/Asset-USDC-2775ca?style=flat-square)
+![Custody](https://img.shields.io/badge/Custody-Non--custodial-f59e0b?style=flat-square)
+![License](https://img.shields.io/badge/License-MIT-6b7280?style=flat-square)
 
 </div>
 
 ---
 
-## What is Payflow?
+## Overview
 
-Payflow abstracts cross-chain USDC settlement into a single payment experience. The user enters an amount and a recipient address on Arc. Payflow detects where the payer holds USDC, selects the best live route via Circle's Cross-Chain Transfer Protocol (CCTP), shows real fees before any signature, and verifies settlement directly on Arc.
+Arc uses USDC as its native gas token, so a payment app on Arc needs no second token for fees. Payflow makes Arc the destination for every payment. The payer can hold USDC on Ethereum, Base, Arbitrum, Avalanche or Optimism, and the recipient receives USDC on Arc.
 
-**No bridge jargon. No custody. No fake states.**
+Under the hood Payflow uses [Circle App Kit](https://developers.circle.com) and CCTP (Cross-Chain Transfer Protocol): USDC is burned on the source chain and minted on Arc. No liquidity pool is involved, and Payflow never holds funds. The user signs once in their own wallet.
 
-It works like sending money through Wise — you see what you send, what the recipient gets, and the fee. Nothing is hidden.
+## Features
 
----
+- **Unified balance.** Reads USDC on every supported chain in parallel and shows the total, with a per-chain breakdown.
+- **Send from any supported chain.** Pick the source chain, enter an amount and an Arc recipient address.
+- **Fee shown before you sign.** The relay fee is estimated up front. Amounts the fee would consume entirely are rejected early.
+- **Resumable payments.** Every payment is stored as an intent with a named state. If a transfer stalls, it can be resumed from the Activity screen.
+- **Payment request links.** Create a `/r/:id` link that pre-fills a payment to your address. See [Known limitations](#known-limitations).
+- **Receipts and history.** Receipt with explorer links, and a local Activity list.
+- **Light and dark themes.**
 
-## Why Arc?
+## Supported chains
 
-Arc is a blockchain where USDC is the native gas token. Every transaction fee is paid in USDC — the same asset users are sending. There is no separate gas token to acquire, no price volatility on fees, and settlement is near-instant.
+| Role | Mainnet (`VITE_USE_MAINNET=true`) | Testnet (default) |
+|---|---|---|
+| Destination | Arc | Arc Testnet |
+| Sources | Ethereum, Base, Arbitrum, Avalanche, Optimism | Sepolia, Base Sepolia, Arbitrum Sepolia, Avalanche Fuji, OP Sepolia |
 
-Payflow uses Arc as the universal destination: regardless of which chain the payer holds USDC on, the recipient always receives USDC on Arc. This makes Arc the settlement layer for a payment network that works across every CCTP-supported chain.
-
----
+Wallet connection is via injected browser wallets (MetaMask and similar). USDC only, minimum payment 0.01 USDC.
 
 ## How it works
 
 ```
-Payer wallet (any chain)
-        │
-        │  1. Payflow reads live USDC balances across all supported chains
-        │  2. User selects source chain, enters amount + recipient
-        │  3. Payflow queries Circle App Kit for route + real fee estimate
-        │  4. User reviews: amount sent, fee, amount received — then signs once
-        │
-        ▼
-Circle CCTP (Cross-Chain Transfer Protocol)
-        │
-        │  5. USDC is burned on the source chain
-        │  6. Circle Attestation Service issues a signed proof
-        │  7. USDC is minted on Arc Mainnet — 1:1, no liquidity pool
-        │
-        ▼
-Recipient receives USDC on Arc
-        │
-        │  8. Payflow queries Arc directly to verify settlement
-        │  9. Receipt generated with real Arc explorer link
-        │  10. Intent marked completed — never from a frontend callback
+Payer wallet (source chain)
+   │ 1. Read USDC balances on all supported chains
+   │ 2. Choose amount + Arc recipient; Payflow estimates the fee via App Kit
+   │ 3. Review screen shows amount, fee and what the recipient receives
+   │ 4. Sign in the wallet (approve + burn on the source chain)
+   ▼
+Circle CCTP + Forwarding Service
+   │ 5. USDC burned on source chain, attested by Circle
+   │ 6. Forwarding Service mints on Arc to the recipient
+   ▼
+Recipient has USDC on Arc → Receipt with explorer links
 ```
 
----
+Details: [docs/PAYMENT_FLOW.md](docs/PAYMENT_FLOW.md).
 
-## Arc components used
+## Tech stack
 
-| Component | How Payflow uses it |
-|---|---|
-| **Arc Mainnet** (chain ID 5042) | Destination for every payment. USDC as native gas. |
-| **Circle App Kit** (`@circle-fin/app-kit`) | Route evaluation, CCTP bridge execution, Forwarding Service, retry/recovery |
-| **Circle Bridge Kit** (`@circle-fin/adapter-viem-v2`) | EIP-1193 adapter connecting App Kit to the user's browser wallet |
-| **CCTP v1** | Burn-and-mint settlement from any supported source chain to Arc |
-| **Arc RPC** | Direct chain queries to verify settlement — never trusts client state |
-| **Arc Explorer** | Receipt links for every completed payment |
+React 18 · Vite · TypeScript · wagmi + viem · ConnectKit · TanStack Query · React Router · Tailwind CSS · Framer Motion · `@circle-fin/app-kit` and `@circle-fin/adapter-viem-v2`
 
----
+## Quick start
 
-## How Payflow differs from a raw App Kit integration
-
-Most App Kit integrations call `kit.bridge()` and display a spinner until it resolves. Payflow adds a structured layer on top:
-
-| Feature | Raw App Kit | Payflow |
-|---|---|---|
-| Fee shown before signing | No | Yes — real estimate on Review screen |
-| Quote locked | No | Yes — re-estimates if quote is stale |
-| Settlement verified | No | Yes — queries Arc directly |
-| State machine | None | 8 named states, persisted to localStorage |
-| Recovery on reload | None | Loads intent → re-derives status from SDK |
-| Double-submit protection | None | Intent locked on first submission |
-| Error messages | SDK errors | Mapped to 7 user-facing copy strings |
-| Multi-chain balance | Connected chain only | All CCTP chains read in parallel |
-
----
-
-## Architecture
-
-```
-src/
-├── lib/
-│   ├── intent.ts         # 8-state payment intent machine + localStorage persistence
-│   ├── kit.ts            # Circle App Kit singleton + EIP-1193 adapter boundary
-│   ├── routes.ts         # Runtime route evaluation — never a hardcoded matrix
-│   ├── errors.ts         # SDK/wagmi → user-facing error string mapper
-│   └── requests.ts       # Payment request CRUD + opaque ID generation
-│
-├── hooks/
-│   └── useMultiChainBalances.ts   # Parallel balanceOf across all CCTP chains
-│
-├── pages/
-│   ├── Home.tsx           # Balance hero + action entry points
-│   ├── Send.tsx           # Amount + recipient entry, source chain detection
-│   ├── Review.tsx         # Real fee summary, route details, confirm CTA
-│   ├── Progress.tsx       # Live state transitions from App Kit events
-│   ├── Receipt.tsx        # Verified settlement + Arc explorer link
-│   ├── Activity.tsx       # Payment history from localStorage intents
-│   └── RequestPage.tsx    # /r/:id payment request resolution
-│
-├── components/
-│   ├── BalanceCard.tsx    # Animated total balance hero card
-│   ├── ChainBalanceSheet.tsx  # Per-chain breakdown bottom sheet
-│   ├── AmountInput.tsx    # Amount entry with quick-chips + real balance validation
-│   ├── RecipientInput.tsx # Address entry with checksum validation
-│   ├── RouteDetails.tsx   # Expandable route info (no bridge jargon)
-│   └── IntentStatusBanner.tsx  # Recoverable intent alert
-│
-└── providers/
-    ├── Web3Provider.tsx   # wagmi + ConnectKit + Arc Mainnet + CCTP source chains
-    └── ThemeProvider.tsx  # Dark/light mode with localStorage persistence
-```
-
----
-
-## Payment intent state machine
-
-```
-                    ┌─────────────┐
-                    │    draft    │◄──────────────────────┐
-                    └──────┬──────┘                       │
-                           │ quote requested               │ back / expired
-                    ┌──────▼──────┐                       │
-                    │   quoting   │                       │
-                    └──────┬──────┘                       │
-                           │ route found                   │
-                    ┌──────▼──────┐                       │
-                    │    ready    │───────────────────────►│
-                    └──────┬──────┘  expired / back
-                           │ user confirms
-               ┌───────────▼───────────┐
-               │  awaiting_signature   │◄── user cancels → cancelled
-               └───────────┬───────────┘
-                           │ signed
-               ┌───────────▼───────────┐
-               │       submitted       │
-               └───────────┬───────────┘
-                           │ source confirmed
-               ┌───────────▼───────────┐
-               │      in_flight        │◄── failure → recoverable
-               └───────────┬───────────┘              │
-                           │ Arc mint confirmed         │ resume
-               ┌───────────▼───────────┐              │
-               │      completed        │◄─────────────┘
-               └───────────────────────┘
-```
-
-**Invariants (never violated):**
-- `completed` requires verified Arc settlement — never set from a callback
-- Quote cannot silently change recipient, amount, fee, or destination
-- Payflow never holds USDC — all transfers go directly wallet → CCTP → Arc
-- One payment request can only be paid once
-
----
-
-## Security
-
-| Concern | How it is handled |
-|---|---|
-| Private keys | Never touched — all signing done by the user's wallet |
-| Client-reported state | Never trusted — all state re-derived from chain queries on reload |
-| Address validation | EIP-55 checksum validation before any intent is created |
-| Amount validation | Strict decimal parsing — rejects scientific notation, NaN, Infinity, dust |
-| Double submit | Intent locked on first submission — UI disabled until terminal state |
-| Replay / double-pay | Payment requests have opaque random IDs; paid flag checked before processing |
-| Secrets | No secrets in the browser bundle — `.env` is gitignored |
-| XSS | No `dangerouslySetInnerHTML` anywhere in the codebase |
-| CSP | Configured at the hosting layer |
-
----
-
-## Running locally
-
-**Prerequisites:** [Bun](https://bun.sh), a browser wallet (MetaMask or any injected wallet), USDC on a supported chain.
+Requires [Bun](https://bun.sh) and a browser wallet.
 
 ```bash
 git clone https://github.com/Siriron/payflow
 cd payflow
 bun install
-```
-
-Create `.env`:
-```env
-VITE_USE_MAINNET=true
-```
-
-```bash
+cp .env.example .env     # VITE_USE_MAINNET=false targets Arc Testnet
 bun run dev
 ```
 
-Open [http://localhost:5173](http://localhost:5173). Connect your wallet. The app targets Arc Mainnet by default.
+Open http://localhost:5173. For testnet you need testnet USDC on one of the source chains (see [Circle's faucet](https://faucet.circle.com)). Full setup, scripts and deployment: [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
-**For local development against Arc Testnet:** set `VITE_USE_MAINNET=false`. You will need USDC on a CCTP testnet chain (Sepolia, Base Sepolia, etc.).
+## Project structure
 
----
+```
+src/
+├── pages/        Home, Send, Review, Progress, Receipt, Activity, RequestPage
+├── components/   UI building blocks (balance card, inputs, sheets, banners)
+├── hooks/        useMultiChainBalances, useNavigateToResume
+├── lib/          intent (state + storage), kit (App Kit facade), requests, errors
+├── providers/    Web3Provider (wagmi + ConnectKit), ThemeProvider
+├── config.ts     Chain selection and wagmi config
+├── onchain-facts.ts   Chain metadata, USDC and CCTP addresses, explorer URLs
+└── onchain-money.ts   Integer (bigint) USDC amount math
+```
 
-## Supported source chains
+More in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
-| Chain | Mainnet | Notes |
-|---|---|---|
-| Ethereum | ✓ | Primary CCTP source |
-| Base | ✓ | Fast, low-fee |
-| Arbitrum | ✓ | |
-| Avalanche | ✓ | |
-| Optimism | ✓ | |
+## Known limitations
 
-All routes are queried at runtime from Circle App Kit — never hardcoded.
+Payflow is a focused prototype. Read these before relying on it:
 
----
+- **Request links are local to one browser.** Payment requests and intents live in `localStorage`; there is no backend. A `/r/:id` link only resolves in the browser that created it, and a request is only marked paid in the payer's browser.
+- **Completion comes from App Kit's result.** A payment is marked complete when the App Kit bridge reports success and a mint transaction hash. Payflow does not separately re-query Arc to confirm it.
+- **Resume after a page reload.** Fast resume uses an in-memory App Kit result and only works within the same session. After a reload, resume re-runs the bridge and asks for a new signature, so check the explorer for your original burn transaction before resuming.
+- **Injected wallets only.** No WalletConnect or passkey support yet.
 
 ## Roadmap
 
-Items in the README only — not yet built:
+Not yet built: server-backed payment links with expiry and status, a payment-intents API with webhooks, independent on-chain settlement verification, WalletConnect and passkey wallets.
 
-- **Payment links at scale** — shareable `/r/:id` links with expiry, webhook callbacks, and a reconciliation dashboard
-- **Developer payment API** — `POST /api/payment-intents` for server-side payment creation with status webhooks
-- **Passkey wallets** — onboard non-crypto users with Face ID / Touch ID via Circle Modular Wallets
-- **Smart contract accounts** — batch approvals, session keys for recurring payments
-- **Gateway deposits** — fast fund-then-spend flow using Circle Gateway for users who hold Arc USDC already
+## License
 
----
-
-## Built with
-
-- [Arc Network](https://arc.io) — settlement chain, USDC as gas
-- [Circle App Kit](https://developers.circle.com/circle-mint/docs/app-kit) — CCTP routing and execution
-- [React](https://react.dev) + [Vite](https://vitejs.dev) + [TypeScript](https://typescriptlang.org)
-- [wagmi](https://wagmi.sh) + [ConnectKit](https://docs.family.co/connectkit) — wallet connection
-- [Framer Motion](https://www.framer.com/motion/) — animations
-- [Tailwind CSS](https://tailwindcss.com) — styling
-
----
-
-<div align="center">
-
-**Built on Arc Network** &nbsp;·&nbsp; Non-custodial &nbsp;·&nbsp; USDC only &nbsp;·&nbsp; MIT License
-
-<sub>Payflow is an independent project. It is not affiliated with, endorsed by, or sponsored by Circle Internet Financial or Arc.</sub>
-
-</div>
+[MIT](LICENSE). Payflow is an independent project and is not affiliated with or endorsed by Circle or Arc.
