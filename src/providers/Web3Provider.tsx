@@ -1,6 +1,6 @@
 /**
  * Web3Provider — wraps wagmi + ConnectKit for Payflow.
- * Chains: Arc Testnet/Mainnet (active) + all CCTP source chains.
+ * Chains: Arc Mainnet (destination) + all CCTP source chains.
  */
 import { WagmiProvider } from 'wagmi'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'

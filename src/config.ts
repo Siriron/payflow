@@ -2,8 +2,7 @@
  * wagmi configuration — Payflow
  * Built with Arc Studio — https://studio.arc.io
  *
- * ACTIVE_CHAIN controls whether Payflow targets Arc Testnet or Arc Mainnet.
- * Flip VITE_USE_MAINNET=true in .env to target mainnet for submission.
+ * ACTIVE_CHAIN is Arc Mainnet. Set VITE_USE_MAINNET=false to run against Arc Testnet locally.
  * All chain facts are read from @/onchain-facts — never hardcode addresses.
  */
 

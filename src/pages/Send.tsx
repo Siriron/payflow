@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useLocation } from 'react-router-dom'
 import { useAccount, useSwitchChain, useConfig } from 'wagmi'
 import { isAddress } from 'viem'
 import { motion } from 'framer-motion'
@@ -18,6 +18,7 @@ const fadeUp = {
 
 export default function Send() {
   const navigate = useNavigate()
+  const location = useLocation()
   const { address, chainId: walletChainId, isConnected } = useAccount()
   const { switchChainAsync } = useSwitchChain()
   const wagmiConfig = useConfig()
@@ -26,6 +27,17 @@ export default function Send() {
   const [recipient, setRecipient] = useState('')
   const [amountError, setAmountError] = useState<string | null>(null)
   const [recipientError, setRecipientError] = useState<string | null>(null)
+
+  // Pre-selected source chain from ChainBalanceSheet navigation
+  const preselectedChainId = (location.state as { sourceChainId?: number } | null)?.sourceChainId
+
+  // If a chain was pre-selected and wallet is not already on it, switch
+  useEffect(() => {
+    if (!preselectedChainId || walletChainId === preselectedChainId) return
+    void switchChainAsync({ chainId: preselectedChainId }).catch(() => { /* user rejected */ })
+  // Only run once on mount when preselectedChainId is set
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [preselectedChainId])
 
   // Purge orphaned draft intents when returning from Review
   useEffect(() => {
@@ -115,10 +127,11 @@ export default function Send() {
           <button
             type="button"
             onClick={() => { void navigate('/') }}
-            className="glass flex size-10 items-center justify-center rounded-[14px] transition-all active:scale-95"
+            className="glass flex items-center gap-1.5 rounded-[14px] px-3 py-2.5 transition-all active:scale-95"
             aria-label="Back to home"
           >
-            <ChevronLeft className="size-5" style={{ color: 'var(--ink)' }} />
+            <ChevronLeft className="size-4" style={{ color: 'var(--ink)' }} />
+            <span className="hidden text-[13px] font-semibold md:block" style={{ color: 'var(--ink)' }}>Back</span>
           </button>
           <div>
             <h1

@@ -5,7 +5,7 @@ import { ACTIVE_ARC_CHAIN } from '@/config'
 // Map App Kit / wagmi chain keys to display names
 const CHAIN_DISPLAY: Record<string, string> = {
   Arc: 'Arc Network',
-  Arc_Testnet: 'Arc Testnet',
+  Arc_Testnet: 'Arc Network',
   Ethereum: 'Ethereum',
   ETH: 'Ethereum',
   Base: 'Base',

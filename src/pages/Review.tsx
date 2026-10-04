@@ -50,9 +50,7 @@ export default function Review() {
 
   return (
     <div className="relative min-h-dvh" style={{ background: 'var(--canvas)' }}>
-      <div className="bg-blobs" aria-hidden="true" />
-
-      <div className="relative z-10 flex min-h-dvh items-end justify-center md:items-center md:p-8">
+      <div className="flex min-h-dvh items-end justify-center md:items-center md:p-8">
         <motion.div
           initial={{ opacity: 0, y: 32 }}
           animate={{ opacity: 1, y: 0 }}
@@ -60,7 +58,8 @@ export default function Review() {
           className="w-full md:max-w-[420px]"
         >
           <div
-            className="glass-sheet overflow-hidden rounded-t-[28px] md:rounded-[28px] shadow-[0_-4px_40px_rgba(15,28,46,0.08)]"
+            className="overflow-hidden rounded-t-[32px] md:rounded-[32px]"
+            style={{ background: 'var(--surface-high)', boxShadow: 'var(--shadow-lg)', border: '1px solid var(--border)' }}
           >
             {/* Spectral strip — signals this is the commit surface */}
             <div className="spectral-strip" />
@@ -77,10 +76,11 @@ export default function Review() {
                 <button
                   type="button"
                   onClick={() => { void navigate('/send') }}
-                  className="glass flex size-10 items-center justify-center rounded-[14px] transition-all active:scale-95"
+                  className="glass flex items-center gap-1.5 rounded-[14px] px-3 py-2.5 transition-all active:scale-95"
                   aria-label="Back"
                 >
-                  <ChevronLeft className="size-5" style={{ color: 'var(--ink)' }} />
+                  <ChevronLeft className="size-4" style={{ color: 'var(--ink)' }} />
+                  <span className="hidden text-[13px] font-semibold md:block" style={{ color: 'var(--ink)' }}>Back</span>
                 </button>
                 <h1
                   className="display text-xl font-bold"
@@ -90,17 +90,25 @@ export default function Review() {
                 </h1>
               </div>
 
-              {/* Amount — left-aligned to match the rows below */}
+              {/* Amount — with source chain label */}
               <div
                 className="mb-4 rounded-[18px] px-5 py-4"
                 style={{ background: 'rgba(15,28,46,0.03)', border: '1px solid var(--border)' }}
               >
-                <p
-                  className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.10em]"
-                  style={{ color: 'var(--muted)' }}
-                >
-                  You send
-                </p>
+                <div className="mb-1 flex items-center justify-between">
+                  <p
+                    className="text-[10px] font-semibold uppercase tracking-[0.10em]"
+                    style={{ color: 'var(--muted)' }}
+                  >
+                    You send
+                  </p>
+                  <span
+                    className="rounded-[7px] px-2 py-0.5 text-[10px] font-semibold"
+                    style={{ background: 'rgba(15,28,46,0.06)', color: 'var(--subtle)' }}
+                  >
+                    from {sourceChainName}
+                  </span>
+                </div>
                 <p
                   className="display text-4xl font-bold tabular-nums"
                   style={{ color: 'var(--ink)', letterSpacing: '-0.04em' }}

@@ -1,7 +1,10 @@
 import { motion } from 'framer-motion'
+import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAccount } from 'wagmi'
-import { ArrowUpRight, Link as LinkIcon, ChevronRight } from 'lucide-react'
+import { ChevronRight } from 'lucide-react'
+import ChainBalanceSheet from '@/components/ChainBalanceSheet'
+import { useMultiChainBalances } from '@/hooks/useMultiChainBalances'
 import PageShell from '@/components/PageShell'
 import BalanceCard from '@/components/BalanceCard'
 import IntentStatusBanner from '@/components/IntentStatusBanner'
@@ -11,6 +14,7 @@ import { findRecoverableIntent, loadRecentIntents } from '@/lib/intent'
 import type { PaymentIntent } from '@/lib/intent'
 import { useNavigateToResume } from '@/hooks/useNavigateToResume'
 import { ACTIVE_ARC_CHAIN } from '@/config'
+import { ConnectKitButton } from 'connectkit'
 
 const item = {
   initial: { opacity: 0, y: 10 },
@@ -27,15 +31,17 @@ export default function Home() {
   const navigateToResume = useNavigateToResume()
   const recoverable = address ? findRecoverableIntent(address) : null
   const recent = address ? loadRecentIntents(address, 5) : []
+  const [sheetOpen, setSheetOpen] = useState(false)
+  const multiChain = useMultiChainBalances()
 
   return (
     <PageShell>
-      <div className="flex min-h-dvh flex-col px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-6 md:min-h-0">
+      <div className="flex min-h-dvh flex-col px-5 pb-[calc(2.5rem+env(safe-area-inset-bottom))] pt-6">
 
-        {/* ── Header ───────────────────────────────────────────── */}
+        {/* ── Header ─────────────────────────────────────────── */}
         <motion.header
           variants={item} initial="initial" animate="animate"
-          className="mb-7 flex items-center justify-between"
+          className="mb-6 flex items-center justify-between"
         >
           <div className="flex items-center gap-2.5">
             <PayflowMark size={30} />
@@ -49,96 +55,79 @@ export default function Home() {
           <WalletButton />
         </motion.header>
 
-        <motion.div variants={stagger} initial="initial" animate="animate" className="flex-1 space-y-5">
+        <motion.div variants={stagger} initial="initial" animate="animate" className="flex-1 space-y-4">
 
-          {/* ── Recoverable banner ───────────────────────────── */}
+          {/* ── Recoverable banner ─────────────────────────── */}
           {recoverable && (
             <motion.div variants={item}>
               <IntentStatusBanner intent={recoverable} onResume={() => navigateToResume(recoverable)} />
             </motion.div>
           )}
 
-          {/* ── Balance hero ─────────────────────────────────── */}
-          <motion.div variants={item} className="pt-2">
-            <BalanceCard />
+          {/* ── Balance hero + action buttons ──────────────── */}
+          <motion.div variants={item}>
+            <BalanceCard
+              multiChain={multiChain}
+              isConnected={isConnected}
+              onSend={() => isConnected ? setSheetOpen(true) : undefined}
+              onRequest={() => { void navigate('/request/new') }}
+            />
           </motion.div>
 
-          {/* ── Action row ───────────────────────────────────── */}
-          <motion.div variants={item} className="grid grid-cols-2 gap-3">
-            <button
-              type="button"
-              onClick={() => { void navigate('/send') }}
-              disabled={!isConnected}
-              className="btn-primary !rounded-[18px] disabled:opacity-35"
-            >
-              <ArrowUpRight className="size-[18px]" strokeWidth={2.5} />
-              Send
-            </button>
-            <button
-              type="button"
-              onClick={() => { void navigate('/request/new') }}
-              disabled={!isConnected}
-              className="btn-secondary !rounded-[18px] disabled:opacity-35"
-            >
-              <LinkIcon className="size-[17px]" strokeWidth={2.2} />
-              Request
-            </button>
-          </motion.div>
-
-          {/* ── Pre-connect pitch — only when disconnected ───── */}
+          {/* ── Pre-connect section ─────────────────────────── */}
           {!isConnected && (
-            <motion.div variants={item} className="space-y-2.5 pt-1">
-              {/* Network live pill */}
+            <motion.div variants={item} className="space-y-3">
+              {/* Network pill */}
               <div
-                className="flex items-center justify-between rounded-[13px] px-4 py-2.5"
+                className="flex items-center justify-between rounded-[16px] px-4 py-3"
                 style={{
-                  background: 'rgba(26,128,71,0.05)',
-                  border: '1px solid rgba(26,128,71,0.12)',
+                  background: 'var(--success-bg)',
+                  border: '1px solid rgba(22,163,74,0.15)',
                 }}
               >
                 <div className="flex items-center gap-2">
-                  <span className="size-1.5 rounded-full" style={{ background: 'var(--success)' }} />
-                  <span className="text-[12px] font-semibold" style={{ color: 'var(--success)' }}>
+                  <span className="size-2 rounded-full" style={{ background: 'var(--success)' }} />
+                  <span className="text-[13px] font-semibold" style={{ color: 'var(--success)' }}>
                     {ACTIVE_ARC_CHAIN.name} · Live
                   </span>
                 </div>
-                <span className="text-[11px]" style={{ color: 'var(--subtle)' }}>USDC as gas</span>
+                <span className="text-[11px] font-medium" style={{ color: 'var(--muted)' }}>USDC as gas</span>
               </div>
 
-              {/* How it works — list, not cards */}
-              <div
-                className="rounded-[18px] px-5 py-4 space-y-3"
-                style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
-              >
-                <p className="text-[10px] font-semibold uppercase tracking-[0.10em]" style={{ color: 'var(--muted)' }}>
-                  How it works
+              {/* How it works */}
+              <div className="card-sm p-5 space-y-3">
+                <p className="text-[11px] font-bold uppercase tracking-[0.10em]" style={{ color: 'var(--subtle)' }}>
+                  How Payflow works
                 </p>
                 {[
                   ['1', 'Connect your wallet'],
-                  ['2', 'Enter amount and recipient'],
-                  ['3', 'We find the best route'],
-                  ['4', 'Sign once — done'],
+                  ['2', 'See USDC across all chains'],
+                  ['3', 'Pick a chain, enter amount + address'],
+                  ['4', 'Sign once — payment arrives on Arc'],
                 ].map(([num, text]) => (
                   <div key={num} className="flex items-center gap-3">
                     <span
-                      className="flex size-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold"
-                      style={{ background: 'rgba(15,28,46,0.07)', color: 'var(--muted)' }}
+                      className="flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold"
+                      style={{ background: 'var(--accent-subtle)', color: 'var(--accent)' }}
                     >
                       {num}
                     </span>
-                    <span className="text-sm" style={{ color: 'var(--ink-2)' }}>{text}</span>
+                    <span className="text-[14px]" style={{ color: 'var(--ink-2)' }}>{text}</span>
                   </div>
                 ))}
+                <div className="pt-1">
+                  <ConnectKitButton />
+                </div>
               </div>
             </motion.div>
           )}
 
-          {/* ── Recent payments ──────────────────────────────── */}
+          {/* ── Recent payments ─────────────────────────────── */}
           {isConnected && recent.length > 0 && (
             <motion.section variants={item}>
-              <div className="mb-3 flex items-center justify-between">
+              <div className="mb-3 flex items-center justify-between px-1">
                 <h2
-                  className="text-[10px] font-semibold uppercase tracking-[0.10em]"
+                  className="text-[11px] font-bold uppercase tracking-[0.10em]"
                   style={{ color: 'var(--muted)' }}
                 >
                   Recent
@@ -147,12 +136,12 @@ export default function Home() {
                   type="button"
                   onClick={() => { void navigate('/activity') }}
                   className="flex items-center gap-0.5 text-[12px] font-semibold transition-opacity hover:opacity-70"
-                  style={{ color: 'var(--accent-hover)' }}
+                  style={{ color: 'var(--accent)' }}
                 >
-                  All <ChevronRight className="size-3" />
+                  See all <ChevronRight className="size-3" />
                 </button>
               </div>
-              <div className="space-y-1.5">
+              <div className="space-y-2">
                 {recent.map((intent) => (
                   <RecentItem key={intent.id} intent={intent} />
                 ))}
@@ -160,26 +149,39 @@ export default function Home() {
             </motion.section>
           )}
 
-          {/* ── Connected empty state ────────────────────────── */}
+          {/* ── Connected empty state ───────────────────────── */}
           {isConnected && recent.length === 0 && (
             <motion.div
               variants={item}
               className="flex flex-col items-center gap-2 py-10 text-center"
             >
-              <p className="text-sm font-medium" style={{ color: 'var(--muted)' }}>No payments yet</p>
-              <p className="text-xs" style={{ color: 'var(--subtle)' }}>
-                Send USDC to any address on Arc
+              <div
+                className="mb-1 flex size-12 items-center justify-center rounded-full"
+                style={{ background: 'var(--surface-2)' }}
+              >
+                <span className="text-[22px]">💸</span>
+              </div>
+              <p className="text-[14px] font-semibold" style={{ color: 'var(--ink-2)' }}>No payments yet</p>
+              <p className="text-[12px]" style={{ color: 'var(--subtle)' }}>
+                Tap Send to pick a chain and send USDC to any Arc address
               </p>
             </motion.div>
           )}
 
         </motion.div>
       </div>
+
+      {/* ── Chain balance sheet ─────────────────────────────── */}
+      <ChainBalanceSheet
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        balances={multiChain.balances}
+      />
     </PageShell>
   )
 }
 
-/* ── Recent payment row ─────────────────────────────────────────── */
+/* ── Recent payment row ────────────────────────────────────────────── */
 const STATE_DOT: Record<string, string> = {
   completed: 'var(--success)',
   failed: 'var(--danger)',
@@ -199,21 +201,28 @@ function RecentItem({ intent }: { intent: PaymentIntent }) {
 
   return (
     <div
-      className="flex items-center justify-between rounded-[14px] px-4 py-3 transition-colors"
+      className="flex items-center justify-between rounded-[16px] px-4 py-3 transition-colors"
       style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
     >
       <div className="flex items-center gap-3 min-w-0">
-        <span className="size-1.5 rounded-full shrink-0" style={{ background: dotColor }} />
-        <p className="mono truncate text-xs font-medium" style={{ color: 'var(--ink-2)' }}>
-          {intent.recipient.slice(0, 10)}…{intent.recipient.slice(-4)}
-        </p>
+        <div
+          className="flex size-9 shrink-0 items-center justify-center rounded-full"
+          style={{ background: dotColor === 'var(--success)' ? 'var(--success-bg)' : 'var(--surface-2)' }}
+        >
+          <span className="size-2 rounded-full" style={{ background: dotColor }} />
+        </div>
+        <div className="min-w-0">
+          <p className="mono truncate text-[12px] font-medium" style={{ color: 'var(--ink-2)' }}>
+            {intent.recipient.slice(0, 10)}…{intent.recipient.slice(-4)}
+          </p>
+          <p className="text-[11px]" style={{ color: dotColor }}>{label}</p>
+        </div>
       </div>
       <div className="ml-4 shrink-0 text-right">
-        <p className="text-sm font-bold tabular-nums" style={{ color: 'var(--ink)' }}>
+        <p className="display text-[15px] font-bold tabular-nums" style={{ color: 'var(--ink)' }}>
           {intent.amount}
-          <span className="ml-0.5 text-xs font-medium" style={{ color: 'var(--subtle)' }}> USDC</span>
+          <span className="ml-0.5 text-[11px] font-medium" style={{ color: 'var(--subtle)' }}> USDC</span>
         </p>
-        <p className="text-[11px]" style={{ color: dotColor }}>{label}</p>
       </div>
     </div>
   )

@@ -1,41 +1,53 @@
-/**
- * PageShell — single layout wrapper for every page.
- * Mobile: full-screen canvas.
- * Desktop: phone-card centered on the canvas (max-w 420px).
- * Blobs live here — rendered once per route, never duplicated.
- */
 import { motion } from 'framer-motion'
-import type { ReactNode } from 'react'
 
-interface Props {
-  children: ReactNode
-  className?: string
-}
+interface Props { children: React.ReactNode }
 
-const variants = {
-  initial: { opacity: 0, y: 10 },
-  animate: { opacity: 1, y: 0, transition: { duration: 0.26, ease: [0.25, 0.1, 0.25, 1] as const } },
-  exit:    { opacity: 0, y: -6, transition: { duration: 0.16, ease: [0.4, 0, 1, 1] as const } },
-}
-
-export default function PageShell({ children, className = '' }: Props) {
+export default function PageShell({ children }: Props) {
   return (
-    <div className="relative min-h-dvh" style={{ background: 'var(--canvas)' }}>
-      <div className="bg-blobs" aria-hidden="true" />
-      <div className="relative z-10 flex min-h-dvh flex-col items-center md:justify-center md:py-10">
-        <motion.div
-          variants={variants}
-          initial="initial"
-          animate="animate"
-          exit="exit"
-          className={`relative w-full flex-1 md:max-w-[420px] md:flex-none md:rounded-[28px] md:overflow-hidden md:shadow-[0_20px_60px_rgba(15,28,46,0.13),0_2px_8px_rgba(15,28,46,0.06)] ${className}`}
-          style={{ background: 'var(--canvas)' }}
+    <div
+      className="relative flex min-h-dvh items-start justify-center"
+      style={{ background: 'var(--canvas)' }}
+    >
+      {/* Desktop: subtle dot-grid pattern behind the phone card */}
+      <div
+        className="pointer-events-none fixed inset-0 hidden md:block"
+        aria-hidden="true"
+        style={{
+          backgroundImage: 'radial-gradient(circle, var(--border-strong) 1px, transparent 1px)',
+          backgroundSize: '28px 28px',
+          opacity: 0.45,
+        }}
+      />
+
+      {/* Desktop: soft radial glow to lift the card */}
+      <div
+        className="pointer-events-none fixed inset-0 hidden md:block"
+        aria-hidden="true"
+        style={{
+          background: 'radial-gradient(ellipse 60% 50% at 50% 40%, rgba(20,97,166,0.06) 0%, transparent 70%)',
+        }}
+      />
+
+      {/* Phone card — full-width on mobile, constrained on desktop */}
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -6 }}
+        transition={{ duration: 0.22, ease: [0.25, 0.1, 0.25, 1] }}
+        className="relative z-10 w-full md:my-10 md:max-w-[420px]"
+        style={{ background: 'var(--canvas)' }}
+      >
+        <div
+          className="min-h-dvh w-full md:min-h-[600px] md:rounded-[40px] md:overflow-hidden"
+          style={{
+            background: 'var(--canvas)',
+            boxShadow: 'var(--shadow-lg)',
+            border: '1px solid var(--border)',
+          }}
         >
           {children}
-        </motion.div>
-      </div>
+        </div>
+      </motion.div>
     </div>
   )
 }
-
-export const fadeUp = variants

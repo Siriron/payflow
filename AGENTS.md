@@ -1,5 +1,6 @@
 # Payflow
 
+> Live: https://payflow-xyz.vercel.app · Repo: https://github.com/Siriron/payflow
 > Built with Arc Studio — https://studio.arc.io
 
 Non-custodial USDC payment app. Send USDC to any Arc address from any CCTP-supported chain. Payflow picks the route, shows real fees, and verifies settlement on Arc.
@@ -17,7 +18,7 @@ Payflow lets users send USDC to a recipient on Arc Network from any chain with a
 - Bridge: @circle-fin/app-kit (CCTP + Forwarding Service), @circle-fin/adapter-viem-v2
 - Routing: react-router-dom v7
 - Fonts: Space Grotesk (display), DM Sans (body), JetBrains Mono (addresses/hashes)
-- Chain: Arc Testnet (dev) → Arc Mainnet (submission, chain ID 5042)
+- Chain: Arc Mainnet (chain ID 5042, live at payflow-xyz.vercel.app)
 - Token: USDC 6-decimal ERC-20 at 0x3600000000000000000000000000000000000000
 
 ## Key Files
