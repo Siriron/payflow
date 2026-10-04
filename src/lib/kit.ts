@@ -23,7 +23,7 @@ interface BridgeKitResult {
 interface AppKitWithBridge {
   on: AppKit['on']
   bridge(params: unknown): Promise<BridgeKitResult>
-  retry(result: unknown, params: unknown): Promise<BridgeKitResult>
+  retryBridge(result: unknown, params: unknown): Promise<BridgeKitResult>
 }
 
 // Singleton — App Kit does not need to be re-instantiated per transfer
@@ -180,7 +180,7 @@ export async function retryTransfer(params: TransferExecutionParams): Promise<Tr
     const adapter = await createViemAdapterFromProvider({ provider })
     const savedResult: unknown = JSON.parse(intent.bridgeResult)
 
-    const retryResult = await kit.retry(savedResult, { from: adapter, to: adapter })
+    const retryResult = await kit.retryBridge(savedResult, { from: adapter, to: adapter })
 
     const steps = retryResult.steps ?? []
     const mintStep = steps.find((s) => s.name === 'mint')

@@ -7,6 +7,7 @@ interface Props {
   multiChain: UseMultiChainBalancesReturn
   onSend: () => void
   onRequest: () => void
+  onBreakdown?: () => void
   isConnected: boolean
 }
 
@@ -52,7 +53,7 @@ function AnimatedAmount({ value }: { value: string }) {
   )
 }
 
-export default function BalanceCard({ multiChain, onSend, onRequest, isConnected }: Props) {
+export default function BalanceCard({ multiChain, onSend, onRequest, onBreakdown, isConnected }: Props) {
   const { totalFormatted, isLoading, refetch } = multiChain
   const [refreshing, setRefreshing] = useState(false)
 
@@ -69,8 +70,9 @@ export default function BalanceCard({ multiChain, onSend, onRequest, isConnected
       {/* ── Hero balance card ─────────────────────────────── */}
       <motion.div
         className="hero-card relative overflow-hidden px-6 pb-7 pt-6"
-        whileTap={isConnected ? { scale: 0.982 } : undefined}
-        style={{ cursor: isConnected ? 'pointer' : 'default' }}
+        onClick={isConnected && onBreakdown ? onBreakdown : undefined}
+        whileTap={isConnected && onBreakdown ? { scale: 0.982 } : undefined}
+        style={{ cursor: isConnected && onBreakdown ? 'pointer' : 'default' }}
       >
         {/* Decorative circle glare — top right */}
         <div

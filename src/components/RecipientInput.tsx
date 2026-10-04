@@ -1,4 +1,6 @@
+import { useState } from 'react'
 import { getAddress, isAddress } from 'viem'
+import { Clipboard, ClipboardCheck } from 'lucide-react'
 
 interface Props {
   value: string
@@ -8,6 +10,18 @@ interface Props {
 
 export default function RecipientInput({ value, onChange, error }: Props) {
   const checksummed = isAddress(value) ? getAddress(value) : null
+  const [pasted, setPasted] = useState(false)
+
+  const handlePaste = async () => {
+    try {
+      const text = await navigator.clipboard.readText()
+      onChange(text.trim())
+      setPasted(true)
+      setTimeout(() => setPasted(false), 1800)
+    } catch {
+      // Clipboard permission denied — ignore silently
+    }
+  }
 
   return (
     <div>
@@ -42,13 +56,33 @@ export default function RecipientInput({ value, onChange, error }: Props) {
           autoComplete="off"
           spellCheck={false}
         />
-        {checksummed && (
+
+        {/* Valid badge OR paste button */}
+        {checksummed ? (
           <span
             className="shrink-0 rounded-[7px] px-2 py-0.5 text-[10px] font-semibold"
             style={{ background: 'rgba(26,128,71,0.10)', color: 'var(--success)' }}
           >
             Valid
           </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => { void handlePaste() }}
+            aria-label="Paste address from clipboard"
+            className="shrink-0 flex items-center gap-1 rounded-[9px] px-2 py-1 text-[11px] font-semibold transition-all active:scale-95"
+            style={{
+              background: pasted ? 'rgba(26,128,71,0.10)' : 'var(--surface-2)',
+              color: pasted ? 'var(--success)' : 'var(--muted)',
+              border: '1px solid var(--border)',
+            }}
+          >
+            {pasted
+              ? <ClipboardCheck className="size-3" />
+              : <Clipboard className="size-3" />
+            }
+            <span>{pasted ? 'Pasted' : 'Paste'}</span>
+          </button>
         )}
       </div>
       {error && (

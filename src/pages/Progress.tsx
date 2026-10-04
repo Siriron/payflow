@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { Check, Circle, AlertCircle } from 'lucide-react'
 import { loadIntent, type PaymentIntent, type IntentState } from '@/lib/intent'
 import { executeTransfer, retryTransfer } from '@/lib/kit'
+import { ACTIVE_ARC_CHAIN } from '@/config'
 
 const STEPS = [
   { key: 'preparing',  label: 'Preparing' },
@@ -60,7 +61,7 @@ export default function Progress() {
       const result = await fn({
         intent,
         provider,
-        useMainnet: import.meta.env.VITE_USE_MAINNET === 'true',
+        useMainnet: ACTIVE_ARC_CHAIN.id === 5042,
       })
 
       const updated = loadIntent(intent.id)

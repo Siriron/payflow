@@ -69,8 +69,9 @@ export default function Home() {
             <BalanceCard
               multiChain={multiChain}
               isConnected={isConnected}
-              onSend={() => isConnected ? setSheetOpen(true) : undefined}
+              onSend={() => { void navigate('/send') }}
               onRequest={() => { void navigate('/request/new') }}
+              onBreakdown={() => setSheetOpen(true)}
             />
           </motion.div>
 
@@ -116,7 +117,17 @@ export default function Home() {
                   </div>
                 ))}
                 <div className="pt-1">
-                  <ConnectKitButton />
+                  <ConnectKitButton.Custom>
+                    {({ show }) => (
+                      <button
+                        type="button"
+                        onClick={show}
+                        className="btn-primary"
+                      >
+                        Connect wallet
+                      </button>
+                    )}
+                  </ConnectKitButton.Custom>
                 </div>
               </div>
             </motion.div>
@@ -151,20 +162,24 @@ export default function Home() {
 
           {/* ── Connected empty state ───────────────────────── */}
           {isConnected && recent.length === 0 && (
-            <motion.div
-              variants={item}
-              className="flex flex-col items-center gap-2 py-10 text-center"
-            >
+            <motion.div variants={item}>
               <div
-                className="mb-1 flex size-12 items-center justify-center rounded-full"
-                style={{ background: 'var(--surface-2)' }}
+                className="rounded-[20px] px-5 py-6 text-center space-y-3"
+                style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
               >
-                <span className="text-[22px]">💸</span>
+                <div
+                  className="mx-auto mb-1 flex size-11 items-center justify-center rounded-full"
+                  style={{ background: 'var(--accent-subtle)' }}
+                >
+                  <span className="text-[20px]">↗</span>
+                </div>
+                <div>
+                  <p className="text-[14px] font-semibold" style={{ color: 'var(--ink)' }}>Send your first payment</p>
+                  <p className="mt-0.5 text-[12px]" style={{ color: 'var(--subtle)' }}>
+                    Tap Send above to pick a chain and send USDC
+                  </p>
+                </div>
               </div>
-              <p className="text-[14px] font-semibold" style={{ color: 'var(--ink-2)' }}>No payments yet</p>
-              <p className="text-[12px]" style={{ color: 'var(--subtle)' }}>
-                Tap Send to pick a chain and send USDC to any Arc address
-              </p>
             </motion.div>
           )}
 

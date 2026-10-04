@@ -8,7 +8,7 @@ import PageShell from '@/components/PageShell'
 import AmountInput from '@/components/AmountInput'
 import RecipientInput from '@/components/RecipientInput'
 import { ACTIVE_ARC_CHAIN, CCTP_SOURCE_CHAINS } from '@/config'
-import { getKitChainName } from '@/lib/kit'
+import { getKitChainName, CHAIN_ID_TO_KIT_NAME } from '@/lib/kit'
 import { createIntent, saveIntent, loadAllIntents } from '@/lib/intent'
 
 const fadeUp = {
@@ -104,7 +104,7 @@ export default function Send() {
       amount,
       sourceChain: kitChainName,
       sourceChainId,
-      destinationChain: import.meta.env.VITE_USE_MAINNET === 'true' ? 'Arc' : 'Arc_Testnet',
+      destinationChain: CHAIN_ID_TO_KIT_NAME[ACTIVE_ARC_CHAIN.id] ?? 'Arc',
     })
     saveIntent(intent)
     void navigate('/review', { state: { intentId: intent.id } })
