@@ -39,7 +39,20 @@ interface BridgeKitResult {
 interface AppKitBridge {
   on: AppKit['on']
   bridge(params: unknown): Promise<BridgeKitResult>
+  estimateBridge(params: unknown): Promise<EstimateKitResult>
   retryBridge(result: BridgeKitResult, context: { from: unknown; to?: unknown }): Promise<BridgeKitResult>
+}
+
+interface EstimateFeeItem {
+  type: string
+  token: string
+  amount: string | null
+  error?: unknown
+}
+
+interface EstimateKitResult {
+  amount: string
+  fees: EstimateFeeItem[]
 }
 
 // ---------------------------------------------------------------------------
@@ -88,6 +101,65 @@ export const CHAIN_ID_TO_KIT_NAME: Record<number, string> = {
 
 export function getKitChainName(chainId: number): string | null {
   return CHAIN_ID_TO_KIT_NAME[chainId] ?? null
+}
+
+// ---------------------------------------------------------------------------
+// Public estimate
+// ---------------------------------------------------------------------------
+
+export interface EstimateResult {
+  /** Forwarder relay fee in USDC decimal string (e.g. "0.05"). Null if estimate failed. */
+  fee: string | null
+  /** Amount recipient will receive = amount - fee. Null if estimate failed. */
+  recipientReceives: string | null
+  /** True when fee >= amount (send would fail). */
+  feeExceedsAmount: boolean
+  /** Raw error if the estimate call threw. */
+  error: string | null
+}
+
+/**
+ * Estimate the CCTP bridge fee without a wallet signature.
+ * Uses a dummy address for the from adapter since we just need the fee quote.
+ */
+export async function estimateTransfer(params: {
+  sourceChain: string
+  amount: string
+  recipient: string
+}): Promise<EstimateResult> {
+  const { sourceChain, amount, recipient } = params
+  const dest = destinationChain()
+
+  try {
+    const estimate = await kit.estimateBridge({
+      from: { chain: sourceChain },
+      to: { chain: dest, recipientAddress: recipient, useForwarder: true },
+      amount,
+    })
+
+    // Sum all fees whose token is USDC (forwarder fee is what matters).
+    let totalFeeUsdc = 0
+    for (const f of estimate.fees) {
+      if (f.amount && (f.token === 'USDC' || f.token === 'usdc')) {
+        const parsed = parseFloat(f.amount)
+        if (!Number.isNaN(parsed)) totalFeeUsdc += parsed
+      }
+    }
+
+    const sendAmount = parseFloat(amount)
+    const feeExceedsAmount = totalFeeUsdc >= sendAmount
+
+    const feeStr = totalFeeUsdc > 0 ? totalFeeUsdc.toFixed(6).replace(/\.?0+$/, '') : null
+    const recipientReceives =
+      totalFeeUsdc > 0 && !feeExceedsAmount
+        ? Math.max(0, sendAmount - totalFeeUsdc).toFixed(6).replace(/\.?0+$/, '')
+        : null
+
+    return { fee: feeStr, recipientReceives, feeExceedsAmount, error: null }
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Could not estimate fee.'
+    return { fee: null, recipientReceives: null, feeExceedsAmount: false, error: msg }
+  }
 }
 
 // ---------------------------------------------------------------------------

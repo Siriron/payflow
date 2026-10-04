@@ -3,12 +3,12 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import { useAccount, useSwitchChain, useConfig } from 'wagmi'
 import { isAddress } from 'viem'
 import { motion } from 'framer-motion'
-import { ChevronLeft } from 'lucide-react'
+import { ChevronLeft, Loader2 } from 'lucide-react'
 import PageShell from '@/components/PageShell'
 import AmountInput from '@/components/AmountInput'
 import RecipientInput from '@/components/RecipientInput'
 import { ACTIVE_ARC_CHAIN, CCTP_SOURCE_CHAINS } from '@/config'
-import { getKitChainName, CHAIN_ID_TO_KIT_NAME } from '@/lib/kit'
+import { getKitChainName, CHAIN_ID_TO_KIT_NAME, estimateTransfer } from '@/lib/kit'
 import { createIntent, saveIntent, loadAllIntents } from '@/lib/intent'
 
 const fadeUp = {
@@ -27,6 +27,7 @@ export default function Send() {
   const [recipient, setRecipient] = useState('')
   const [amountError, setAmountError] = useState<string | null>(null)
   const [recipientError, setRecipientError] = useState<string | null>(null)
+  const [estimating, setEstimating] = useState(false)
 
   // Pre-selected source chain from ChainBalanceSheet navigation
   const preselectedChainId = (location.state as { sourceChainId?: number } | null)?.sourceChainId
@@ -98,16 +99,52 @@ export default function Send() {
       catch { return }
     }
 
-    const intent = createIntent({
-      payer: address,
-      recipient,
-      amount,
-      sourceChain: kitChainName,
-      sourceChainId,
-      destinationChain: CHAIN_ID_TO_KIT_NAME[ACTIVE_ARC_CHAIN.id] ?? 'Arc',
-    })
-    saveIntent(intent)
-    void navigate('/review', { state: { intentId: intent.id } })
+    // Estimate fee before creating intent — surfaces "fee > amount" early.
+    setEstimating(true)
+    setAmountError(null)
+    try {
+      const est = await estimateTransfer({
+        sourceChain: kitChainName,
+        amount,
+        recipient,
+      })
+
+      if (est.feeExceedsAmount) {
+        const feeLabel = est.fee ? `${est.fee} USDC` : 'more than your amount'
+        setAmountError(
+          `Amount too small. The network relay fee is ${feeLabel}. Try a larger amount.`,
+        )
+        setEstimating(false)
+        return
+      }
+
+      const intent = createIntent({
+        payer: address,
+        recipient,
+        amount,
+        sourceChain: kitChainName,
+        sourceChainId,
+        destinationChain: CHAIN_ID_TO_KIT_NAME[ACTIVE_ARC_CHAIN.id] ?? 'Arc',
+        estimatedFee: est.fee ?? undefined,
+        recipientAmount: est.recipientReceives ?? undefined,
+      })
+      saveIntent(intent)
+      void navigate('/review', { state: { intentId: intent.id } })
+    } catch {
+      // Estimate failed — proceed without it. Bridge will surface the error later.
+      const intent = createIntent({
+        payer: address,
+        recipient,
+        amount,
+        sourceChain: kitChainName,
+        sourceChainId,
+        destinationChain: CHAIN_ID_TO_KIT_NAME[ACTIVE_ARC_CHAIN.id] ?? 'Arc',
+      })
+      saveIntent(intent)
+      void navigate('/review', { state: { intentId: intent.id } })
+    } finally {
+      setEstimating(false)
+    }
   }
 
   useEffect(() => {
@@ -116,7 +153,7 @@ export default function Send() {
 
   if (!isConnected) return null
 
-  const canProceed = isSourceSupported && isValidAmount(amount) && isAddress(recipient)
+  const canProceed = !estimating && isSourceSupported && isValidAmount(amount) && isAddress(recipient)
 
   return (
     <PageShell>
@@ -193,7 +230,11 @@ export default function Send() {
               disabled={!canProceed}
               className="btn-primary"
             >
-              Review payment
+              {estimating ? (
+                <><Loader2 className="size-4 animate-spin" /> Checking route…</>
+              ) : (
+                'Review payment'
+              )}
             </button>
           </div>
         </motion.div>

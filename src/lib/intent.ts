@@ -68,6 +68,8 @@ export function createIntent(params: {
   sourceChain: string
   sourceChainId: number
   destinationChain: string
+  estimatedFee?: string
+  recipientAmount?: string
   requestId?: string
 }): PaymentIntent {
   const now = Date.now()
@@ -80,8 +82,8 @@ export function createIntent(params: {
     sourceChainId: params.sourceChainId,
     destinationChain: params.destinationChain,
     state: 'draft',
-    estimatedFee: null,
-    recipientAmount: null,
+    estimatedFee: params.estimatedFee ?? null,
+    recipientAmount: params.recipientAmount ?? null,
     sourceTxHash: null,
     destinationTxHash: null,
     transferId: null,
