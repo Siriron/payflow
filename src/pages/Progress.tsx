@@ -4,7 +4,7 @@ import { useAccount } from 'wagmi'
 import type { EIP1193Provider } from 'viem'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, Circle, AlertCircle } from 'lucide-react'
-import { loadIntent, type PaymentIntent, type IntentState } from '@/lib/intent'
+import { loadIntent, updateIntent, type PaymentIntent, type IntentState } from '@/lib/intent'
 import { executeTransfer, retryTransfer } from '@/lib/kit'
 
 const STEPS = [
@@ -58,6 +58,18 @@ export default function Progress() {
       }
       const fn = resuming && intent.state === 'recoverable' ? retryTransfer : executeTransfer
       const result = await fn({ intent, provider })
+
+      // Force-write completed if the transfer succeeded, regardless of what the
+      // SDK wrote. Covers the case where the SDK saved a stale/failed state but
+      // the bridge actually went through (Arc mint confirmed).
+      if (result.success) {
+        updateIntent(intent.id, {
+          state: 'completed',
+          destinationTxHash: result.destinationTxHash ?? undefined,
+          sourceTxHash: result.sourceTxHash ?? undefined,
+          errorMessage: null,
+        })
+      }
 
       const updated = loadIntent(intent.id)
       if (updated) setIntent(updated)

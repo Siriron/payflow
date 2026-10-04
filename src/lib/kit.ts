@@ -137,12 +137,16 @@ export async function estimateTransfer(params: {
       amount,
     })
 
-    // Sum all fees whose token is USDC (forwarder fee is what matters).
+    // Log raw estimate in dev so we can see the exact fee shape from the SDK.
+    if (import.meta.env.DEV) console.debug('[kit] estimateBridge raw:', JSON.stringify(estimate))
+
+    // Sum all fees with a non-null amount. The SDK may return the token symbol
+    // as 'USDC', 'USDC.e', a contract address, or an empty string — accept all.
     let totalFeeUsdc = 0
     for (const f of estimate.fees) {
-      if (f.amount && (f.token === 'USDC' || f.token === 'usdc')) {
+      if (f.amount) {
         const parsed = parseFloat(f.amount)
-        if (!Number.isNaN(parsed)) totalFeeUsdc += parsed
+        if (!Number.isNaN(parsed) && parsed > 0) totalFeeUsdc += parsed
       }
     }
 
