@@ -1,8 +1,5 @@
 /*
- * Money math for USDC amounts. GENERATED — do not edit.
- *
- * Arc Studio writes this file from its own source, so the rules here are the ones
- * Arc Studio itself is tested against. Edits are overwritten.
+ * Money math for USDC amounts.
  *
  * Import the math instead of writing it:
  *
@@ -19,9 +16,6 @@
 /*
  * Money math for USDC amounts: single owner of "how many decimals?" and "may
  * these two amounts be added?".
- *
- * This source ships verbatim into every sandbox as `@/onchain-money`, with only
- * the import specifier below rewritten. Add no other repo import.
  *
  * Values are integer `bigint` smallest units carried with their decimal count.
  * No `number` holds a value: a float loses microdollars on a large balance.
@@ -326,7 +320,7 @@ export function usdcDecimalsFor(chainId: number): number {
   const usdc = getUsdc(chainId);
 
   if (!usdc) {
-    throw new AmountError('NO_USDC', `Chain ${chainId} has no USDC contract in Arc Studio's onchain facts`);
+    throw new AmountError('NO_USDC', `Chain ${chainId} has no USDC contract in the onchain facts`);
   }
 
   return usdc.decimals;

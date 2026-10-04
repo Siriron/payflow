@@ -1,6 +1,5 @@
 /**
  * wagmi configuration — Payflow
- * Built with Arc Studio — https://studio.arc.io
  *
  * ACTIVE_CHAIN is Arc Mainnet. Set VITE_USE_MAINNET=false to run against Arc Testnet locally.
  * All chain facts are read from @/onchain-facts — never hardcode addresses.
@@ -22,7 +21,6 @@ import {
   optimism,
 } from 'viem/chains'
 import { injected } from 'wagmi/connectors'
-import { registerChain } from './tracing'
 
 const USE_MAINNET = import.meta.env.VITE_USE_MAINNET === 'true'
 
@@ -41,10 +39,6 @@ const sourceAndMainnet = USE_MAINNET
   : ([mainnet, sepolia, baseSepolia, arbitrumSepolia, avalancheFuji, optimismSepolia] as const)
 
 export const ALL_CHAINS = [arc, arcTestnet, ...sourceAndMainnet] as const
-
-// Pre-register chain RPC URLs for tracing
-registerChain(arcTestnet.id, arcTestnet.rpcUrls.default.http[0])
-registerChain(arc.id, arc.rpcUrls.default.http[0])
 
 const connectors = [injected()]
 
