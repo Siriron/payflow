@@ -125,9 +125,12 @@ export default function Review() {
               >
                 <Row
                   label="Recipient receives"
-                  value={intent.recipientAmount ? `${intent.recipientAmount} USDC` : `${intent.amount} USDC`}
+                  value={intent.recipientAmount ? `${intent.recipientAmount} USDC` : `≈${intent.amount} USDC`}
                 />
-                <Row label="Network fee" value={intent.estimatedFee ? `${intent.estimatedFee} USDC` : 'Gas only'} />
+                <Row
+                  label="Network fee"
+                  value={intent.estimatedFee ? `${intent.estimatedFee} USDC` : 'Included in route'}
+                />
                 <Row label="Destination" value={ACTIVE_ARC_CHAIN.name} />
                 <div className="px-4 py-3">
                   <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.09em]" style={{ color: 'var(--muted)' }}>To</p>
@@ -191,7 +194,7 @@ export default function Review() {
                   )}
                 </button>
                 <p className="text-center text-[11px]" style={{ color: 'var(--subtle)' }}>
-                  Payflow charges no fees · No Circle protocol fee on standard transfers
+                  Payflow charges no fees · A small relay fee may apply to the transfer
                 </p>
               </div>
 
