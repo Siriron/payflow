@@ -1,10 +1,11 @@
 /**
- * PaymentIntent — 8-state machine with localStorage persistence.
+ * PaymentIntent — 10-state machine with localStorage persistence.
  * States: draft | quoting | ready | awaiting_signature | submitted | settling | completed | failed
  * Plus: recoverable | cancelled
+ * (quoting and ready are declared but not entered by the current flow.)
  *
  * Invariants:
- * - never "completed" without a verified Arc txHash
+ * - never "completed" unless the Arc mint transaction receipt was read and succeeded
  * - never double-submit: UI locked once awaiting_signature
  * - amounts stored as strings; never floats
  */

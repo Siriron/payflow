@@ -61,9 +61,11 @@ export default function Send() {
   const kitChainName = sourceChainId ? getKitChainName(sourceChainId) : null
 
   const supportedChainIds: number[] = CCTP_SOURCE_CHAINS.map((c) => c.id)
+  // Wallet already on Arc: USDC is sent directly on Arc, no bridge needed.
+  const isDirect = sourceChainId === ACTIVE_ARC_CHAIN.id
   const isSourceSupported =
     sourceChainId !== undefined &&
-    supportedChainIds.includes(sourceChainId) &&
+    (isDirect || supportedChainIds.includes(sourceChainId)) &&
     kitChainName !== null
 
   const isValidAmount = (v: string): boolean => {
@@ -97,6 +99,22 @@ export default function Send() {
     if (!isSourceSupported) {
       try { await switchChainAsync({ chainId: ACTIVE_ARC_CHAIN.id }) }
       catch { return }
+    }
+
+    // Direct Arc transfer: no bridge route, so no relay-fee estimate is needed.
+    if (isDirect) {
+      const intent = createIntent({
+        payer: address,
+        recipient,
+        amount,
+        sourceChain: kitChainName,
+        sourceChainId,
+        destinationChain: CHAIN_ID_TO_KIT_NAME[ACTIVE_ARC_CHAIN.id] ?? 'Arc',
+        recipientAmount: amount,
+      })
+      saveIntent(intent)
+      void navigate('/review', { state: { intentId: intent.id } })
+      return
     }
 
     // Estimate fee before creating intent — surfaces "fee > amount" early.
@@ -219,7 +237,7 @@ export default function Send() {
 
           {/* Route hint — small, not competing */}
           <p className="text-[12px] text-center" style={{ color: 'var(--subtle)' }}>
-            Settles on Arc. We'll handle the route.
+            {isDirect ? 'Sent directly on Arc. Gas is paid in USDC.' : "Settles on Arc. We'll handle the route."}
           </p>
 
           {/* CTA — pushed to bottom */}

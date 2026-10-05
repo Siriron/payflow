@@ -54,11 +54,13 @@ It works like sending money through Wise — you see what you send, what the rec
 |---|---|
 | **Unified balance** | USDC balances on every supported chain are read in parallel and shown as one total, with a per-chain breakdown sheet. |
 | **Send from any supported chain** | Pick the source chain, enter an amount and an Arc recipient. Payflow handles the route. |
+| **Send directly on Arc** | If your wallet is already on Arc, Payflow sends a plain USDC transfer with no bridge. Gas is paid in USDC. |
 | **Fee before you sign** | The relay fee is estimated up front. If the fee would consume the whole amount, the payment is stopped before anything is created. |
 | **Sign once** | A single wallet flow (approve + burn) on the source chain. The Forwarding Service mints on Arc, so the recipient needs no wallet interaction. |
-| **Resumable payments** | Every payment is a persisted intent with a named state. Stalled payments surface as a banner on Home and a resume action in Activity. |
-| **Payment request links** | Create a `/r/:id` link that pre-fills a payment to your address, with optional note and expiry. |
-| **Receipts and history** | Receipt with source and destination explorer links, plus a local Activity list. |
+| **Resumable payments** | Every payment is a persisted intent with a named state. Stalled payments surface as a banner on Home and a resume action in Activity. Resume never sends twice. |
+| **Payment request links** | Create a self-contained `/r/…` link that pre-fills the amount and your address. The request lives inside the link, so it opens in any browser — no account, no server. |
+| **Receipts and history** | Receipt with explorer links, plus a local Activity list. |
+| **Verified receipt links** | `Copy verified link` on a receipt gives a public `/p/<tx hash>` page. Whoever opens it sees the transaction as Arc recorded it — status, block, time and USDC transfers — read from the network, not from the link. |
 | **Light and dark themes** | Persisted per browser. |
 
 ---
@@ -93,8 +95,10 @@ Circle CCTP (Cross-Chain Transfer Protocol)
 Recipient receives USDC on Arc
         │
         │  8. App Kit reports success with the mint transaction hash
-        │  9. Receipt generated with real source and Arc explorer links
-        │ 10. Intent marked completed and saved to local history
+        │  9. Payflow reads that mint transaction's receipt directly from Arc
+        │     and confirms it succeeded
+        │ 10. Intent marked completed, receipt generated with real explorer
+        │     links, and saved to local history
 ```
 
 Full walkthrough: [docs/PAYMENT_FLOW.md](docs/PAYMENT_FLOW.md).
@@ -107,10 +111,10 @@ Full walkthrough: [docs/PAYMENT_FLOW.md](docs/PAYMENT_FLOW.md).
 |---|---|
 | **Arc Mainnet** (chain ID 5042) | Destination for every payment on the live app. USDC as native gas. |
 | **Arc Testnet** | Destination when `VITE_USE_MAINNET` is not `true`. |
-| **Circle App Kit** (`@circle-fin/app-kit`) | Fee estimation, CCTP bridge execution, Forwarding Service, retry of failed steps |
+| **Circle App Kit** (`@circle-fin/app-kit`) | Fee estimation, CCTP v2 bridge execution, Forwarding Service, retry of failed steps |
 | **Circle viem adapter** (`@circle-fin/adapter-viem-v2`) | EIP-1193 adapter connecting App Kit to the user's browser wallet |
 | **CCTP + Forwarding Service** | Burn-and-mint settlement from any supported source chain to Arc, minted by Circle's relay |
-| **Arc RPC** | Native-USDC balance reads on the destination chain |
+| **Arc RPC** | Balance reads, and the settlement check: the mint transaction receipt is read from Arc before a payment is marked complete |
 | **Arc Explorer** | Receipt links for every completed payment |
 
 ---
@@ -125,10 +129,13 @@ Most App Kit integrations call `kit.bridge()` and display a spinner until it res
 | Tiny-amount protection | No | Yes — rejected up front when the fee would meet or exceed the amount |
 | State machine | None | 10 named states, persisted to `localStorage` on every change |
 | Live progress | Raw events | `bridge.approve` and `bridge.burn` events mapped to 5 plain-language steps |
-| Recovery | Manual | Stalled payments become `recoverable`; same-session resume continues from the failed step |
+| Settlement check | Trust the SDK result | Reads the mint transaction receipt from Arc and requires it to have succeeded |
+| Recovery | Manual | Stalled payments become `recoverable`; same-session resume continues from the failed step; after a reload Payflow never re-sends a payment that already burned |
 | Double-submit protection | None | Confirm is disabled once submitted; each intent is started once per wallet connection |
 | Error messages | SDK errors | Mapped to 7 fixed user-facing messages |
 | Multi-chain balance | Connected chain only | All supported chains read in parallel, refreshed every 15 seconds |
+| Wallet already on Arc | Not covered | Direct USDC transfer, no bridge |
+| Shareable proof of payment | None | Public verified-receipt page read from Arc |
 | Amount handling | Strings / floats | Decimal strings stored, `bigint` math with explicit decimals for balances |
 
 ---
@@ -141,7 +148,8 @@ src/
 │   ├── intent.ts         # Payment intent states + localStorage persistence
 │   ├── kit.ts            # Circle App Kit facade + EIP-1193 adapter boundary
 │   ├── errors.ts         # SDK/wagmi → user-facing error string mapper
-│   └── requests.ts       # Payment request storage + opaque ID generation
+│   ├── requests.ts       # Self-contained request links + local status
+│   └── verify.ts         # Reads a tx receipt from Arc and decodes USDC transfers
 │
 ├── hooks/
 │   ├── useMultiChainBalances.ts   # Parallel balanceOf across all supported chains
@@ -154,7 +162,8 @@ src/
 │   ├── Progress.tsx       # Live step transitions while the transfer runs
 │   ├── Receipt.tsx        # Completed payment + explorer links
 │   ├── Activity.tsx       # Payment history from local intents, resume actions
-│   └── RequestPage.tsx    # /request/new and /r/:id payment requests
+│   ├── RequestPage.tsx    # /request/new and /r/:id payment requests
+│   └── VerifiedPayment.tsx # /p/:hash public payment verification
 │
 ├── components/
 │   ├── BalanceCard.tsx         # Animated total balance hero card
@@ -208,10 +217,11 @@ Deeper write-up: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 ```
 
 **Invariants:**
-- `completed` is only written when App Kit reports a successful bridge; the mint transaction hash is read from the SDK result
+- `completed` is only written after App Kit reports a successful bridge **and** the mint transaction receipt on Arc was read and succeeded
+- A payment that already burned on the source chain is never bridged a second time
 - Amounts are stored as decimal strings and never as floats
 - Payflow never holds USDC — all transfers go wallet → CCTP → Arc
-- A payment request, once marked paid in a browser, cannot be paid again from that browser
+- A payment request, once marked paid in a browser, cannot be paid again from that browser (paid status is local — see limitations)
 
 `quoting` and `ready` exist in the type for future use and are not entered by the current flow.
 
@@ -228,7 +238,10 @@ Deeper write-up: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 | Double submit | Confirm disabled after the first tap; each intent starts once per wallet connection |
 | Network safety | Wallet is switched to the intent's source chain before signing |
 | Error handling | Raw SDK/wallet errors mapped to fixed messages |
-| Replay / double-pay | Requests use opaque `crypto.randomUUID()` IDs; paid status is checked before a request can be paid |
+| Settlement | Mint transaction receipt read from Arc before a payment is marked complete |
+| Double-send | An intent that already has a transaction on chain can never start a second payment, including after a page reload |
+| Verified links | `/p/<hash>` accepts only a transaction hash. Everything shown is read from the Arc RPC; nothing from the link is displayed as fact |
+| Request links | Decoded and validated (address, amount, lengths) before use; invalid or tampered links show "not found". The payer sees the recipient and amount on Review before signing |
 | Secrets | None in the browser bundle — `.env` is gitignored, only `VITE_USE_MAINNET` is read |
 | XSS | No `dangerouslySetInnerHTML`, `innerHTML` or `eval` in `src/` |
 
@@ -277,37 +290,31 @@ More in [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md), including deployment and add
 
 | Chain | Mainnet | Testnet | Notes |
 |---|---|---|---|
-| Arc | ✓ | ✓ | Destination — USDC is the native gas token |
+| Arc | ✓ | ✓ | Destination, and a direct source for wallets already on Arc — USDC is the native gas token |
 | Ethereum | ✓ | Sepolia | Primary CCTP source |
 | Base | ✓ | Base Sepolia | Fast, low-fee |
 | Arbitrum | ✓ | Arbitrum Sepolia | |
 | Avalanche | ✓ | Avalanche Fuji | |
 | Optimism | ✓ | OP Sepolia | |
 
-Fee estimates are fetched at runtime from Circle App Kit — never hardcoded. USDC only. Wallet connection is via injected browser wallets.
+Fee estimates are fetched at runtime from Circle App Kit — never hardcoded. USDC only. Connects with any EVM browser wallet.
 
 ---
 
 ## Known limitations
 
-Payflow is a focused prototype. These are the current boundaries:
+Payflow runs entirely in the browser with no backend. That keeps it free to host and non-custodial, with these consequences:
 
-- **No backend.** Intents, requests and history live in `localStorage`. A `/r/:id` link resolves only in the browser that created it, and a request is marked paid only in the payer's browser.
-- **Completion comes from App Kit.** Payflow trusts App Kit's reported result and mint hash; it does not run a separate on-chain check on Arc.
-- **Resume after a reload.** Fast resume relies on an in-memory App Kit result and works within the same session. After a reload, resume re-runs the bridge and asks for a new signature — check the explorer for your original burn before resuming.
-- **Injected wallets only.** No WalletConnect or passkey support yet.
-
----
+- **Request status is per browser.** A request link works in any browser, because the request is encoded in the link. But "paid" is recorded only in the browser that made the payment, so the same link can be paid more than once and the requester's app does not flip to "paid". The payer can share a verified receipt link, which lets the requester confirm the payment on Arc.
+- **History is per browser.** Activity and receipts are stored in `localStorage` on the device used.
+- **Reload during settlement.** If you reload the page after your USDC was sent but before settlement is confirmed, Payflow will not send again. It shows the source transaction and Circle completes the Arc side automatically; check the explorer if it takes more than a few minutes.
 
 ## Roadmap
 
 Not yet built:
 
-- **Safer resume** — use the stored source transaction hash before ever re-running a bridge after a reload
-- **Independent settlement verification** — confirm the mint directly on Arc before marking a payment complete
-- **Payment links at scale** — server-backed `/r/:id` links with expiry, status, webhook callbacks and a reconciliation dashboard
+- **Shared request status** — server-backed links with expiry, paid status and webhook callbacks
 - **Developer payment API** — `POST /api/payment-intents` for server-side payment creation with status webhooks
-- **More wallets** — WalletConnect and passkey onboarding for non-crypto users
 - **Smart contract accounts** — batch approvals, session keys for recurring payments
 - **Gateway deposits** — fast fund-then-spend flow using Circle Gateway for users who already hold Arc USDC
 

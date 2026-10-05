@@ -6,6 +6,7 @@ import { ChevronLeft, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { loadIntent, type PaymentIntent } from '@/lib/intent'
 import { requireChain } from '@/onchain-facts'
 import { ACTIVE_ARC_CHAIN } from '@/config'
+import { isDirectArcIntent } from '@/lib/kit'
 
 export default function Review() {
   const navigate = useNavigate()
@@ -27,6 +28,8 @@ export default function Review() {
   }, [intent, navigate])
 
   if (!intent) return null
+
+  const isDirect = isDirectArcIntent(intent)
 
   const sourceChainName = (() => {
     try { return requireChain(intent.sourceChainId).name } catch { return intent.sourceChain }
@@ -129,7 +132,7 @@ export default function Review() {
                 />
                 <Row
                   label="Network fee"
-                  value={intent.estimatedFee ? `${intent.estimatedFee} USDC` : 'Included in route'}
+                  value={isDirect ? 'Paid in USDC gas' : intent.estimatedFee ? `${intent.estimatedFee} USDC` : 'Included in route'}
                 />
                 <Row label="Destination" value={ACTIVE_ARC_CHAIN.name} />
                 <div className="px-4 py-3">
@@ -166,7 +169,7 @@ export default function Review() {
                       style={{ background: 'rgba(15,28,46,0.03)', border: '1px solid var(--border)' }}
                     >
                       <RouteRow label="Source" value={sourceChainName} />
-                      <RouteRow label="Method" value="Circle CCTP" />
+                      <RouteRow label="Method" value={isDirect ? 'Direct transfer' : 'Circle CCTP'} />
                       <RouteRow label="Settlement" value={ACTIVE_ARC_CHAIN.name} />
                     </div>
                   </motion.div>
@@ -194,7 +197,7 @@ export default function Review() {
                   )}
                 </button>
                 <p className="text-center text-[11px]" style={{ color: 'var(--subtle)' }}>
-                  Payflow charges no fees · A small relay fee may apply to the transfer
+                  {isDirect ? 'Payflow charges no fees · Network gas is paid in USDC' : 'Payflow charges no fees · A small relay fee may apply to the transfer'}
                 </p>
               </div>
 

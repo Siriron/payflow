@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { motion, useMotionValue, useTransform, animate, AnimatePresence } from 'framer-motion'
-import { ExternalLink, Copy, Check } from 'lucide-react'
+import { ExternalLink, Copy, Check, Link as LinkIcon } from 'lucide-react'
 import { loadIntent, type PaymentIntent } from '@/lib/intent'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 import { ACTIVE_ARC_CHAIN } from '@/config'
@@ -106,6 +106,7 @@ export default function Receipt() {
   const location = useLocation()
   const intentId = (location.state as { intentId?: string })?.intentId
   const [copied, setCopied] = useState(false)
+  const [linkCopied, setLinkCopied] = useState(false)
 
   const [intent] = useState<PaymentIntent | null>(() => {
     if (!intentId) return null
@@ -136,6 +137,15 @@ export default function Receipt() {
       setTimeout(() => setCopied(false), 2400)
     })
   }, [receiptText])
+
+  const copyVerifiedLink = useCallback(() => {
+    if (!intent?.destinationTxHash) return
+    const url = `${window.location.origin}/p/${intent.destinationTxHash}`
+    void navigator.clipboard.writeText(url).then(() => {
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2400)
+    })
+  }, [intent])
 
   useEffect(() => {
     if (!intent) { void navigate('/') }
@@ -302,6 +312,20 @@ export default function Receipt() {
                   )}
                 </AnimatePresence>
               </button>
+              {intent.destinationTxHash && (
+                <button
+                  type="button"
+                  onClick={copyVerifiedLink}
+                  className="btn-secondary"
+                  style={linkCopied ? { color: 'var(--success)', borderColor: 'rgba(22,163,74,0.3)' } : {}}
+                >
+                  {linkCopied ? (
+                    <span className="flex items-center gap-2"><Check className="size-[15px]" /> Link copied</span>
+                  ) : (
+                    <span className="flex items-center gap-2"><LinkIcon className="size-[15px]" /> Copy verified link</span>
+                  )}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => { void navigate('/') }}
