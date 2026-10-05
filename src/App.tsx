@@ -9,6 +9,7 @@ import Progress from '@/pages/Progress'
 import Receipt from '@/pages/Receipt'
 import Activity from '@/pages/Activity'
 import { NewRequest, ResolveRequest } from '@/pages/RequestPage'
+import VerifiedPayment from '@/pages/VerifiedPayment'
 
 /** Wraps Routes so AnimatePresence can see location changes */
 function AnimatedRoutes() {
@@ -24,6 +25,7 @@ function AnimatedRoutes() {
         <Route path="/activity" element={<Activity />} />
         <Route path="/request/new" element={<NewRequest />} />
         <Route path="/r/:id" element={<ResolveRequest />} />
+        <Route path="/p/:hash" element={<VerifiedPayment />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </AnimatePresence>
