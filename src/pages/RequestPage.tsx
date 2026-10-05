@@ -10,7 +10,7 @@ import { motion } from 'framer-motion'
 import { ChevronLeft, Copy, Check, Link as LinkIcon, ArrowUpRight } from 'lucide-react'
 import { toast } from 'sonner'
 import { isAddress } from 'viem'
-import { createRequest, saveRequest, loadRequest, generateRequestLink } from '@/lib/requests'
+import { createRequest, saveRequest, resolveRequest, generateRequestLink, normalizeRequestAmount } from '@/lib/requests'
 import { createIntent, saveIntent } from '@/lib/intent'
 import { getKitChainName } from '@/lib/kit'
 import { ACTIVE_ARC_CHAIN } from '@/config'
@@ -40,10 +40,11 @@ export function NewRequest() {
   if (!isConnected) return null
 
   const handleCreate = () => {
-    if (!address || !amount || parseFloat(amount) <= 0) return
-    const req = createRequest({ creator: address, amount, description })
+    const normalized = normalizeRequestAmount(amount)
+    if (!address || !normalized) return
+    const req = createRequest({ creator: address, amount: normalized, description: description.trim() })
     saveRequest(req)
-    setLink(generateRequestLink(req.id))
+    setLink(generateRequestLink(req))
   }
 
   const copyLink = () => {
@@ -219,7 +220,7 @@ export function ResolveRequest() {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const { address, chainId: walletChainId, isConnected } = useAccount()
-  const req = id ? loadRequest(id) : null
+  const req = id ? resolveRequest(id) : null
   const [now] = useState<number>(() => Date.now())
 
   if (!req) {
