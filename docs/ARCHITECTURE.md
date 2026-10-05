@@ -22,10 +22,11 @@ onchain-*.ts  Chain facts and USDC math
 | `/send` | Send | Amount and recipient entry, fee estimate |
 | `/review` | Review | Fee summary, route details, confirm |
 | `/progress` | Progress | Runs the transfer and shows live steps |
-| `/receipt` | Receipt | Completed payment with explorer links |
+| `/receipt` | Receipt | Completed payment with explorer links and a verified-receipt link |
 | `/activity` | Activity | Local payment history, resume actions |
 | `/request/new` | NewRequest | Create a payment request link |
 | `/r/:id` | ResolveRequest | Pay a request |
+| `/p/:hash` | VerifiedPayment | Public, read-only verification of a payment from its Arc transaction hash |
 | `*` | | Redirects to `/` |
 
 `vercel.json` rewrites all paths to `index.html` so client-side routes survive a refresh.
@@ -40,7 +41,9 @@ The only module that imports `@circle-fin/app-kit`. It exposes:
 
 - `estimateTransfer({ sourceChain, amount, recipient })` – calls `estimateBridge` with the Forwarding Service enabled, sums the returned fees and reports whether the fee would meet or exceed the amount.
 - `executeTransfer({ intent, provider })` – builds a viem adapter from the wallet's EIP-1193 provider, runs `bridge`, and moves the intent through its states from App Kit events (`bridge.approve`, `bridge.burn`).
-- `retryTransfer({ intent, provider })` – resumes a recoverable payment (see [PAYMENT_FLOW.md](PAYMENT_FLOW.md#recovery)).
+- `retryTransfer({ intent, provider })` – resumes a recoverable payment: re-verifies a known Arc hash, resumes the live SDK result in the same session, and never re-bridges after a reload (see [PAYMENT_FLOW.md](PAYMENT_FLOW.md#recovery)).
+- `verifyArcMint` (internal) – reads the mint transaction receipt from the Arc RPC; a payment completes only if it succeeded.
+- `isDirectArcIntent` / direct transfer – when the payer's wallet is already on Arc (`sourceChainId` equals the Arc chain ID), `executeTransfer` skips App Kit and sends a standard ERC-20 `transfer` on the Arc USDC contract, signed in the wallet. Gas is paid in USDC. The transaction receipt is then verified like any other payment.
 - `CHAIN_ID_TO_KIT_NAME` – maps numeric chain IDs to App Kit chain names.
 
 The destination uses `useForwarder: true`, so Circle's forwarding service mints on Arc and no destination wallet or adapter is needed.
@@ -51,11 +54,15 @@ A `PaymentIntent` records payer, recipient, amount (decimal **string**), source/
 
 ### `lib/requests.ts` — payment requests
 
-Request records (creator, amount, description, optional expiry, status) under `payflow:requests` (latest 100). IDs come from `crypto.randomUUID()`. `markRequestPaid` is idempotent and respects expiry.
+Request records (creator, amount, description, optional expiry, status) under `payflow:requests` (latest 100). A request link is `/r/<token>` where the token is the request encoded as base64url JSON; `decodeRequestToken` validates it and `resolveRequest` prefers a local record (older `/r/<uuid>` links, paid status) before falling back to the token. IDs come from `crypto.randomUUID()`. `markRequestPaid` is idempotent and respects expiry.
 
 ### `lib/errors.ts`
 
 Maps raw wallet/SDK errors to seven user-facing messages: cancelled, insufficient balance, invalid address, route unavailable, still settling, needs attention, payment failed. Internal error text is never shown to users.
+
+### `lib/verify.ts` — public verification
+
+`verifyArcPayment(hash)` validates the hash, reads the transaction receipt from the Arc RPC and returns `confirmed`, `reverted`, `not_found` or `invalid`. For confirmed transactions it decodes USDC `Transfer` events emitted by the Arc USDC contract (`decodeUsdcTransfers`, pure and unit-testable) and lists them largest first. The `/p/:hash` page only ever takes a hash from the URL; amounts, recipients and status all come from the chain.
 
 ### `hooks/useMultiChainBalances.ts`
 
@@ -73,7 +80,7 @@ Issues one ERC-20 `balanceOf` per chain via wagmi's `useReadContracts`, refetchi
 | Wallet and chain | wagmi | Injected connector |
 | Balances | wagmi + TanStack Query | 15 s refetch |
 | Payment intents | `localStorage` `payflow:intents` | Last 50 |
-| Payment requests | `localStorage` `payflow:requests` | Last 100 |
+| Payment requests | In the link itself, plus `localStorage` `payflow:requests` for status | Last 100 locally |
 | Theme | `localStorage` | Via `ThemeProvider` |
 | Live bridge result | in-memory `Map` in `kit.ts` | Lost on reload; used for fast resume |
 
