@@ -9,10 +9,12 @@
 
 import { AppKit } from '@circle-fin/app-kit'
 import { createViemAdapterFromProvider } from '@circle-fin/adapter-viem-v2'
-import type { EIP1193Provider } from 'viem'
+import { createPublicClient, createWalletClient, custom, erc20Abi, http, type EIP1193Provider } from 'viem'
 import { type PaymentIntent, transition, updateIntent } from './intent'
 import { parsePayflowError } from './errors'
 import { ACTIVE_ARC_CHAIN } from '../config'
+import { getUsdc } from '../onchain-facts'
+import { Amount } from '../onchain-money'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -201,6 +203,119 @@ export interface TransferResult {
 }
 
 // ---------------------------------------------------------------------------
+// Arc settlement verification
+// ---------------------------------------------------------------------------
+
+type ArcVerification = 'confirmed' | 'reverted' | 'unconfirmed'
+
+const TX_HASH_RE = /^0x[0-9a-fA-F]{64}$/
+
+/**
+ * Reads the destination (mint) transaction receipt directly from Arc.
+ * A payment is only marked completed when this returns 'confirmed'.
+ * Polls briefly because the public RPC can lag behind the Forwarding Service.
+ */
+async function verifyArcMint(txHash: string | null): Promise<ArcVerification> {
+  if (!txHash || !TX_HASH_RE.test(txHash)) return 'unconfirmed'
+  const client = createPublicClient({ chain: ACTIVE_ARC_CHAIN, transport: http() })
+  for (let attempt = 0; attempt < 10; attempt++) {
+    try {
+      const receipt = await client.getTransactionReceipt({ hash: txHash as `0x${string}` })
+      return receipt.status === 'success' ? 'confirmed' : 'reverted'
+    } catch {
+      // Not found yet (or RPC hiccup) — wait and try again.
+      await new Promise((resolve) => setTimeout(resolve, 2000))
+    }
+  }
+  return 'unconfirmed'
+}
+
+const MSG_UNCONFIRMED =
+  'Your payment was sent, but Payflow could not confirm it on Arc yet. Check again in a moment.'
+const MSG_REVERTED = 'The settlement transaction on Arc did not succeed. Your funds were not received.'
+
+function shortHash(hash: string): string {
+  return `${hash.slice(0, 8)}…${hash.slice(-6)}`
+}
+
+function msgAlreadySent(sourceTxHash: string): string {
+  return (
+    `Your USDC was already sent from the source chain (${shortHash(sourceTxHash)}). ` +
+    'Circle completes the Arc side automatically and it can take a few minutes. ' +
+    'Do not send again — check the source-chain explorer for this transaction.'
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Direct transfer on Arc (wallet already on Arc — no bridge)
+// ---------------------------------------------------------------------------
+
+/** True when the payer is already on Arc, so USDC moves with a plain ERC-20 transfer. */
+export function isDirectArcIntent(intent: Pick<PaymentIntent, 'sourceChainId'>): boolean {
+  return intent.sourceChainId === ACTIVE_ARC_CHAIN.id
+}
+
+/**
+ * Sends USDC on Arc with a standard ERC-20 transfer signed in the user's wallet.
+ * Gas is paid in USDC (Arc's native token). No App Kit, no bridge, no relay fee.
+ * Completion uses the same rule as bridged payments: the transaction receipt is
+ * read from Arc and must have succeeded.
+ */
+async function executeDirectTransfer(params: TransferExecutionParams): Promise<TransferResult> {
+  const { intent, provider } = params
+  let updatedIntent = transition(intent, 'awaiting_signature')
+
+  try {
+    const usdc = getUsdc(ACTIVE_ARC_CHAIN.id)
+    if (!usdc) throw new Error('USDC is not configured for this network.')
+    const value = Amount.parse(intent.amount, usdc.decimals).raw
+
+    const walletClient = createWalletClient({
+      account: intent.payer as `0x${string}`,
+      chain: ACTIVE_ARC_CHAIN,
+      transport: custom(provider),
+    })
+
+    // Make sure the wallet is on Arc before it is asked to sign.
+    if ((await walletClient.getChainId()) !== ACTIVE_ARC_CHAIN.id) {
+      await walletClient.switchChain({ id: ACTIVE_ARC_CHAIN.id })
+    }
+
+    const hash = await walletClient.writeContract({
+      address: usdc.address as `0x${string}`,
+      abi: erc20Abi,
+      functionName: 'transfer',
+      args: [intent.recipient as `0x${string}`, value],
+    })
+
+    // Signed and broadcast. The same hash is both the sent and the settled transaction.
+    updatedIntent = transition(updatedIntent, 'settling', { destinationTxHash: hash })
+
+    const verification = await verifyArcMint(hash)
+    if (verification === 'confirmed') {
+      transition(updatedIntent, 'completed', {
+        destinationTxHash: hash,
+        bridgeResult: JSON.stringify({ method: 'direct', verification }),
+        errorMessage: null,
+      })
+      return { success: true, destinationTxHash: hash, sourceTxHash: null, transferId: null, rawResult: null, error: null }
+    }
+    const message = verification === 'reverted' ? MSG_REVERTED : MSG_UNCONFIRMED
+    transition(updatedIntent, verification === 'reverted' ? 'failed' : 'recoverable', {
+      destinationTxHash: hash,
+      bridgeResult: JSON.stringify({ method: 'direct', verification }),
+      errorMessage: message,
+    })
+    return { success: false, destinationTxHash: hash, sourceTxHash: null, transferId: null, rawResult: null, error: message }
+  } catch (err) {
+    const { code, message } = parsePayflowError(err)
+    const nextState = code === 'CANCELLED' ? 'cancelled' : 'failed'
+    transition(updatedIntent, nextState, { errorMessage: message })
+    return { success: false, destinationTxHash: null, sourceTxHash: null, transferId: null, rawResult: null, error: message }
+  }
+}
+
+// ---------------------------------------------------------------------------
 // executeTransfer
 // ---------------------------------------------------------------------------
 
@@ -211,6 +326,18 @@ export interface TransferResult {
  */
 export async function executeTransfer(params: TransferExecutionParams): Promise<TransferResult> {
   const { intent, provider } = params
+
+  // Never start a second payment for an intent that already has a transaction on chain.
+  if (intent.sourceTxHash) {
+    const message = msgAlreadySent(intent.sourceTxHash)
+    return { success: false, destinationTxHash: null, sourceTxHash: intent.sourceTxHash, transferId: null, rawResult: null, error: message }
+  }
+  if (intent.destinationTxHash) {
+    return { success: false, destinationTxHash: intent.destinationTxHash, sourceTxHash: null, transferId: null, rawResult: null, error: MSG_UNCONFIRMED }
+  }
+
+  // Wallet already on Arc: plain USDC transfer, no bridge.
+  if (isDirectArcIntent(intent)) return executeDirectTransfer(params)
 
   let updatedIntent = transition(intent, 'awaiting_signature')
 
@@ -259,12 +386,23 @@ export async function executeTransfer(params: TransferExecutionParams): Promise<
 
     if (result.state === 'success') {
       liveResultCache.delete(intent.id)
-      transition(updatedIntent, 'completed', {
+      const verification = await verifyArcMint(destinationTxHash)
+      if (verification === 'confirmed') {
+        transition(updatedIntent, 'completed', {
+          sourceTxHash,
+          destinationTxHash,
+          bridgeResult: JSON.stringify({ state: result.state, stepsCount: steps.length }),
+        })
+        return { success: true, destinationTxHash, sourceTxHash, transferId: null, rawResult: result, error: null }
+      }
+      const message = verification === 'reverted' ? MSG_REVERTED : MSG_UNCONFIRMED
+      transition(updatedIntent, verification === 'reverted' ? 'failed' : 'recoverable', {
         sourceTxHash,
         destinationTxHash,
-        bridgeResult: JSON.stringify({ state: result.state, stepsCount: steps.length }),
+        bridgeResult: JSON.stringify({ state: result.state, verification }),
+        errorMessage: message,
       })
-      return { success: true, destinationTxHash, sourceTxHash, transferId: null, rawResult: result, error: null }
+      return { success: false, destinationTxHash, sourceTxHash, transferId: null, rawResult: result, error: message }
     } else {
       // Keep the live result in memory for retry — do NOT rely on JSON roundtrip.
       liveResultCache.set(intent.id, result)
@@ -296,11 +434,24 @@ export async function executeTransfer(params: TransferExecutionParams): Promise<
 
 /**
  * Retry a recoverable transfer.
- * Uses the live in-memory BridgeKitResult when available (same session).
- * Falls back to a full re-bridge if the session was reloaded.
+ * - Destination hash already known: re-verify it on Arc (no signature).
+ * - Live in-memory BridgeKitResult available (same session): resume from the failed step.
+ * - Session reloaded after the burn: never re-bridge (that would burn twice); tell the user.
  */
 export async function retryTransfer(params: TransferExecutionParams): Promise<TransferResult> {
   const { intent, provider } = params
+
+  // Settlement already reported: re-check it on Arc. No wallet signature involved.
+  if (intent.destinationTxHash) {
+    const verification = await verifyArcMint(intent.destinationTxHash)
+    if (verification === 'confirmed') {
+      transition(intent, 'completed', { errorMessage: null })
+      return { success: true, destinationTxHash: intent.destinationTxHash, sourceTxHash: intent.sourceTxHash, transferId: null, rawResult: null, error: null }
+    }
+    const message = verification === 'reverted' ? MSG_REVERTED : MSG_UNCONFIRMED
+    transition(intent, verification === 'reverted' ? 'failed' : 'recoverable', { errorMessage: message })
+    return { success: false, destinationTxHash: intent.destinationTxHash, sourceTxHash: intent.sourceTxHash, transferId: null, rawResult: null, error: message }
+  }
 
   const liveResult = liveResultCache.get(intent.id)
 
@@ -310,33 +461,26 @@ export async function retryTransfer(params: TransferExecutionParams): Promise<Tr
     return { success: false, destinationTxHash: null, sourceTxHash: null, transferId: null, rawResult: null, error: 'No recoverable state found.' }
   }
 
+  // Session was reloaded (live result lost) but the burn already happened.
+  // Re-running the bridge would ask for a new signature and burn again, so don't.
+  if (!liveResult && intent.sourceTxHash) {
+    const message = msgAlreadySent(intent.sourceTxHash)
+    updateIntent(intent.id, { errorMessage: message })
+    return { success: false, destinationTxHash: null, sourceTxHash: intent.sourceTxHash, transferId: null, rawResult: null, error: message }
+  }
+
   let updatedIntent = transition(intent, 'settling')
 
   try {
     const adapter = await createViemAdapterFromProvider({ provider })
 
-    let retryResult: BridgeKitResult
-
-    if (liveResult) {
-      // Fast path: SDK resumes from the failed step internally.
-      // ForwarderDestination retry — no destination adapter needed.
-      retryResult = await kit.retryBridge(liveResult, {
-        from: adapter,
-        to: undefined,
-      })
-    } else {
-      // Slow path: session was reloaded, live result lost.
-      // Re-execute the full bridge from scratch.
-      retryResult = await kit.bridge({
-        from: { adapter, chain: intent.sourceChain },
-        to: {
-          chain: destinationChain(),
-          recipientAddress: intent.recipient,
-          useForwarder: true,
-        },
-        amount: intent.amount,
-      })
-    }
+    // Same-session resume: the SDK continues from the failed step internally.
+    // ForwarderDestination retry — no destination adapter needed.
+    // (liveResult is always defined here; the reload case returned above.)
+    const retryResult: BridgeKitResult = await kit.retryBridge(liveResult as BridgeKitResult, {
+      from: adapter,
+      to: undefined,
+    })
 
     const steps = retryResult.steps ?? []
     const mintStep = findStep(steps, 'mint')
@@ -344,11 +488,21 @@ export async function retryTransfer(params: TransferExecutionParams): Promise<Tr
 
     if (retryResult.state === 'success') {
       liveResultCache.delete(intent.id)
-      transition(updatedIntent, 'completed', {
+      const verification = await verifyArcMint(destinationTxHash)
+      if (verification === 'confirmed') {
+        transition(updatedIntent, 'completed', {
+          destinationTxHash,
+          bridgeResult: JSON.stringify({ state: retryResult.state }),
+        })
+        return { success: true, destinationTxHash, sourceTxHash: intent.sourceTxHash, transferId: null, rawResult: retryResult, error: null }
+      }
+      const message = verification === 'reverted' ? MSG_REVERTED : MSG_UNCONFIRMED
+      transition(updatedIntent, verification === 'reverted' ? 'failed' : 'recoverable', {
         destinationTxHash,
-        bridgeResult: JSON.stringify({ state: retryResult.state }),
+        bridgeResult: JSON.stringify({ state: retryResult.state, verification }),
+        errorMessage: message,
       })
-      return { success: true, destinationTxHash, sourceTxHash: intent.sourceTxHash, transferId: null, rawResult: retryResult, error: null }
+      return { success: false, destinationTxHash, sourceTxHash: intent.sourceTxHash, transferId: null, rawResult: retryResult, error: message }
     } else {
       // Keep updated live result for another retry attempt.
       liveResultCache.set(intent.id, retryResult)
