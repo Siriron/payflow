@@ -59,7 +59,7 @@ It works like sending money through Wise — you see what you send, what the rec
 | **Sign once** | A single wallet flow (approve + burn) on the source chain. The Forwarding Service mints on Arc, so the recipient needs no wallet interaction. |
 | **Resumable payments** | Every payment is a persisted intent with a named state. Stalled payments surface as a banner on Home and a resume action in Activity. Resume never sends twice. |
 | **Payment request links** | Create a self-contained `/r/…` link that pre-fills the amount and your address. The request lives inside the link, so it opens in any browser — no account, no server. |
-| **Receipts and history** | Receipt with explorer links, plus a local Activity list. For bridged payments the receipt also shows what the recipient actually received on Arc and the relay fee, read from the chain. |
+| **Receipts and history** | Receipt with explorer links. Activity lists payments sent from this browser, plus your USDC transfers on Arc (sent and received) read from the Arc Explorer when your wallet is connected, so history survives a cleared browser. For bridged payments the receipt also shows what the recipient actually received on Arc and the relay fee, read from the chain. |
 | **Verified receipt links** | `Copy verified link` on a receipt gives a public `/p/<tx hash>` page. Whoever opens it sees the transaction as Arc recorded it — status, block, time and the USDC transfers, including the amount the recipient received — read from the network, not from the link. |
 | **Light and dark themes** | Persisted per browser. |
 
@@ -177,7 +177,8 @@ src/
 │   ├── kit.ts            # Circle App Kit facade + EIP-1193 adapter boundary
 │   ├── errors.ts         # SDK/wagmi → user-facing error string mapper
 │   ├── requests.ts       # Self-contained request links + local status
-│   └── verify.ts         # Reads a tx receipt from Arc and decodes USDC transfers
+│   ├── verify.ts         # Reads a tx receipt from Arc and decodes USDC transfers
+│   └── chainHistory.ts   # USDC transfers for a wallet from the Arc Explorer API (validated)
 │
 ├── hooks/
 │   ├── useMultiChainBalances.ts   # Parallel balanceOf across all supported chains
@@ -200,6 +201,7 @@ src/
 │   ├── RecipientInput.tsx      # Address entry with validation
 │   ├── RouteDetails.tsx        # Expandable route info (no bridge jargon)
 │   ├── IntentStatusBanner.tsx  # Recoverable intent alert
+│   ├── MenuButton.tsx          # Header menu: Activity, Request payment
 │   └── ...                     # Shell, splash, wallet button, logo
 │
 ├── providers/
@@ -334,8 +336,8 @@ Fee estimates are fetched at runtime from Circle App Kit — never hardcoded. US
 Payflow runs entirely in the browser with no backend. That keeps it free to host and non-custodial, with these consequences:
 
 - **The relay fee is deducted on arrival and is a visible share of small payments.** In the Base → Arc test above it was 0.018978 USDC on a 0.123 USDC payment. Sending larger amounts makes the fee proportionally smaller. Direct sends on Arc have no relay fee.
-- **Request status is per browser.** A request link works in any browser, because the request is encoded in the link. But "paid" is recorded only in the browser that made the payment, so the same link can be paid more than once and the requester's app does not flip to "paid". The payer can share a verified receipt link, which lets the requester confirm the payment on Arc.
-- **History is per browser.** Activity and receipts are stored in `localStorage` on the device used.
+- **Request status is per browser.** A request link works in any browser, because the request is encoded in the link. But "paid" is recorded only in the browser that made the payment, so the same link can be paid more than once and the requester's app does not flip to "paid". The requester can confirm payment from Activity → On Arc, where received USDC transfers appear, or from a verified receipt link the payer shares.
+- **Local history is per browser.** Payments sent from this browser are kept in `localStorage`, so clearing site data removes that list. The "On Arc" section of Activity is read from the Arc Explorer's public API, so it survives that, but it is best effort: if the explorer is unreachable, the page says so and only local history shows.
 - **Reload during settlement.** If you reload the page after your USDC was sent but before settlement is confirmed, Payflow will not send again. It shows the source transaction and Circle completes the Arc side automatically; check the explorer if it takes more than a few minutes.
 
 ## Roadmap
