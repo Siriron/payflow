@@ -133,6 +133,8 @@ export default function ChainBalanceSheet({ open, onClose, balances }: Props) {
 
   const sourceBalances = balances.filter((b) => !b.isArc)
   const arcBalance = balances.find((b) => b.isArc)
+  // Arc is also a sending chain: from Arc, USDC is sent directly (no bridge).
+  const sendFromBalances = arcBalance ? [arcBalance, ...sourceBalances] : sourceBalances
 
   return (
     <AnimatePresence>
@@ -246,7 +248,7 @@ export default function ChainBalanceSheet({ open, onClose, balances }: Props) {
                 Send from
               </p>
               <div className="flex flex-col gap-2">
-                {sourceBalances.map((b, i) => (
+                {sendFromBalances.map((b, i) => (
                   <motion.button
                     key={b.chainId}
                     type="button"
@@ -268,7 +270,7 @@ export default function ChainBalanceSheet({ open, onClose, balances }: Props) {
                           {chainShort(b.chainName)}
                         </p>
                         <p className="text-[11px]" style={{ color: 'var(--subtle)' }}>
-                          Tap to send from here
+                          {b.isArc ? 'Direct on Arc · no bridge' : 'Tap to send from here'}
                         </p>
                       </div>
                     </div>
