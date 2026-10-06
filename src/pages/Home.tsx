@@ -9,6 +9,7 @@ import PageShell from '@/components/PageShell'
 import BalanceCard from '@/components/BalanceCard'
 import IntentStatusBanner from '@/components/IntentStatusBanner'
 import WalletButton from '@/components/WalletButton'
+import MenuButton from '@/components/MenuButton'
 import { PayflowMark } from '@/components/PayflowLogo'
 import { findRecoverableIntent, loadRecentIntents } from '@/lib/intent'
 import type { PaymentIntent } from '@/lib/intent'
@@ -43,10 +44,11 @@ export default function Home() {
           variants={item} initial="initial" animate="animate"
           className="mb-6 flex items-center justify-between"
         >
-          <div className="flex items-center gap-2.5">
+          <div className="flex min-w-0 items-center gap-2">
+            <MenuButton />
             <PayflowMark size={30} />
             <h1
-              className="display text-[19px] font-bold"
+              className="display hidden text-[19px] font-bold min-[400px]:block"
               style={{ color: 'var(--ink)', letterSpacing: '-0.04em' }}
             >
               Payflow
@@ -177,6 +179,9 @@ export default function Home() {
                   <p className="text-[14px] font-semibold" style={{ color: 'var(--ink)' }}>Send your first payment</p>
                   <p className="mt-0.5 text-[12px]" style={{ color: 'var(--subtle)' }}>
                     Tap Send above to pick a chain and send USDC
+                  </p>
+                  <p className="mt-2 text-[11px]" style={{ color: 'var(--subtle)' }}>
+                    This list shows payments sent from this browser. Your full USDC activity on Arc is under Menu → Activity.
                   </p>
                 </div>
               </div>
