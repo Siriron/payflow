@@ -64,6 +64,10 @@ Maps raw wallet/SDK errors to seven user-facing messages: cancelled, insufficien
 
 `verifyArcPayment(hash)` validates the hash, reads the transaction receipt from the Arc RPC and returns `confirmed`, `reverted`, `not_found` or `invalid`. For confirmed transactions it decodes USDC `Transfer` events emitted by the Arc USDC contract (`decodeUsdcTransfers`, pure and unit-testable) and lists them largest first. The `/p/:hash` page takes a hash and an optional `?to=` address from the URL, used only to pick which on-chain transfer to highlight; amounts, recipients and status all come from the chain. On a bridged receipt, Receipt uses the same function to show what the recipient actually received and the relay fee.
 
+### `lib/chainHistory.ts` — on-chain activity
+
+`fetchArcUsdcTransfers(address)` asks the Arc Explorer's public API (`/api/v2/addresses/<address>/token-transfers`, the explorer is a Blockscout instance) for the wallet's USDC transfers and returns up to 25. Each item is validated (`parseTransferItem`): hash and address formats, the token must be the Arc USDC contract, the value must be an integer string, and the wallet must be on one side of the transfer; anything else is dropped. Direction is derived by comparing against the connected address, and a transfer from the zero address is shown as a cross-chain payment. Activity de-duplicates against payments already listed from local storage and shows a plain message if the explorer cannot be reached.
+
 ### `hooks/useMultiChainBalances.ts`
 
 Issues one ERC-20 `balanceOf` per chain via wagmi's `useReadContracts`, refetching every 15 seconds. Totals are summed as `bigint` and formatted only for display.
@@ -80,6 +84,7 @@ Issues one ERC-20 `balanceOf` per chain via wagmi's `useReadContracts`, refetchi
 | Wallet and chain | wagmi | Injected connector |
 | Balances | wagmi + TanStack Query | 15 s refetch |
 | Payment intents | `localStorage` `payflow:intents` | Last 50 |
+| On-chain USDC activity | Arc Explorer API, fetched on demand | Last 25 transfers, not stored |
 | Payment requests | In the link itself, plus `localStorage` `payflow:requests` for status | Last 100 locally |
 | Theme | `localStorage` | Via `ThemeProvider` |
 | Live bridge result | in-memory `Map` in `kit.ts` | Lost on reload; used for fast resume |

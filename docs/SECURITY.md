@@ -24,6 +24,7 @@ Payflow is a non-custodial, client-only app. It has no server, no accounts and n
 ## Limits to be aware of
 
 - Intent and request data in `localStorage` is user-editable and is not authoritative. Treat it as a convenience record, not proof of payment. Use the explorer links to verify.
+- The Activity screen's on-chain list comes from a third-party API (the Arc Explorer). Items are validated and only USDC transfers involving the connected wallet are shown, but the list is informational: use the Verify page or the explorer link to check any transaction.
 - A request link is data, not a signed message: anyone can create a link naming any address, and links carry no shared "paid" state. Always check the recipient and amount on the Review screen before signing.
 - If a reload interrupts settlement, Payflow will not re-send; Circle completes the Arc side and the source transaction can be checked on the explorer.
 - No Content-Security-Policy is shipped in this repository. If deploying on your own infrastructure, add one at the hosting layer (connections are needed to chain RPCs, Circle endpoints and Google Fonts).
