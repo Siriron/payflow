@@ -6,6 +6,9 @@ import { loadIntent, type PaymentIntent } from '@/lib/intent'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 import { ACTIVE_ARC_CHAIN } from '@/config'
 import { markRequestPaid } from '@/lib/requests'
+import { isDirectArcIntent } from '@/lib/kit'
+import { verifyArcPayment } from '@/lib/verify'
+import { parseUsdc, formatUsdc } from '@/onchain-money'
 import PageShell from '@/components/PageShell'
 
 /** Animated amount count-up for receipt */
@@ -107,6 +110,7 @@ export default function Receipt() {
   const intentId = (location.state as { intentId?: string })?.intentId
   const [copied, setCopied] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [settled, setSettled] = useState<{ received: string; fee: string | null } | null>(null)
 
   const [intent] = useState<PaymentIntent | null>(() => {
     if (!intentId) return null
@@ -140,11 +144,29 @@ export default function Receipt() {
 
   const copyVerifiedLink = useCallback(() => {
     if (!intent?.destinationTxHash) return
-    const url = `${window.location.origin}/p/${intent.destinationTxHash}`
+    const url = `${window.location.origin}/p/${intent.destinationTxHash}?to=${intent.recipient}`
     void navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true)
       setTimeout(() => setLinkCopied(false), 2400)
     })
+  }, [intent])
+
+  // Bridged payments: read what the recipient actually received from Arc.
+  // (The relay fee is deducted on arrival, so this can be less than the amount sent.)
+  useEffect(() => {
+    if (!intent?.destinationTxHash || isDirectArcIntent(intent)) return
+    let cancelled = false
+    void verifyArcPayment(intent.destinationTxHash).then((r) => {
+      if (cancelled || r.status !== 'confirmed') return
+      const mine = r.transfers.filter((t) => t.to.toLowerCase() === intent.recipient.toLowerCase())
+      if (mine.length === 0) return
+      const receivedRaw = mine.reduce((sum, t) => sum + t.raw, 0n)
+      let sentRaw: bigint
+      try { sentRaw = parseUsdc(intent.amount) } catch { return }
+      const feeRaw = sentRaw - receivedRaw
+      setSettled({ received: formatUsdc(receivedRaw), fee: feeRaw > 0n ? formatUsdc(feeRaw) : null })
+    })
+    return () => { cancelled = true }
   }, [intent])
 
   useEffect(() => {
@@ -248,6 +270,12 @@ export default function Receipt() {
                 value={`${intent.recipient.slice(0, 10)}…${intent.recipient.slice(-6)}`}
                 mono
               />
+              {settled && (
+                <ReceiptRow label="Recipient received" value={`${settled.received} USDC`} />
+              )}
+              {settled?.fee && (
+                <ReceiptRow label="Relay fee" value={`${settled.fee} USDC`} />
+              )}
               <ReceiptRow label="Network" value={ACTIVE_ARC_CHAIN.name} />
               {intent.destinationTxHash && (
                 <ReceiptRow

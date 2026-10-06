@@ -13,7 +13,7 @@ Payflow is a non-custodial, client-only app. It has no server, no accounts and n
 | Amounts | Kept as decimal strings and handled as `bigint` with explicit decimals; no floating-point balance math. The fee estimate display uses JavaScript numbers for presentation only. |
 | Double submit | Review disables the confirm button once submitted, and Progress starts each intent once per connector. |
 | Double send | An intent that already has a transaction on chain can never start another payment, including resume after a page reload. |
-| Verified links | `/p/:hash` accepts only a validated transaction hash and displays what the Arc RPC returns for it. Nothing from the link is shown as fact. |
+| Verified links | `/p/:hash` accepts a validated transaction hash and an optional `?to=` address. Amounts and status are displayed from what the Arc RPC returns; if the address has no transfer in the transaction, the page says so. |
 | Settlement | The Arc mint transaction receipt is read from the Arc RPC and must have succeeded before a payment is marked complete. |
 | Request links | The token is decoded and validated (address, amount, field lengths) before use. The note is rendered as plain text. |
 | Network | Chain is switched to the intent's source chain before signing. |

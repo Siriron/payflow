@@ -62,7 +62,7 @@ Maps raw wallet/SDK errors to seven user-facing messages: cancelled, insufficien
 
 ### `lib/verify.ts` — public verification
 
-`verifyArcPayment(hash)` validates the hash, reads the transaction receipt from the Arc RPC and returns `confirmed`, `reverted`, `not_found` or `invalid`. For confirmed transactions it decodes USDC `Transfer` events emitted by the Arc USDC contract (`decodeUsdcTransfers`, pure and unit-testable) and lists them largest first. The `/p/:hash` page only ever takes a hash from the URL; amounts, recipients and status all come from the chain.
+`verifyArcPayment(hash)` validates the hash, reads the transaction receipt from the Arc RPC and returns `confirmed`, `reverted`, `not_found` or `invalid`. For confirmed transactions it decodes USDC `Transfer` events emitted by the Arc USDC contract (`decodeUsdcTransfers`, pure and unit-testable) and lists them largest first. The `/p/:hash` page takes a hash and an optional `?to=` address from the URL, used only to pick which on-chain transfer to highlight; amounts, recipients and status all come from the chain. On a bridged receipt, Receipt uses the same function to show what the recipient actually received and the relay fee.
 
 ### `hooks/useMultiChainBalances.ts`
 
