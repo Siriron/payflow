@@ -3,7 +3,7 @@
 ## Steps
 
 1. **Send** – the user enters an amount (minimum 0.01 USDC) and a recipient. The address is validated with viem's `isAddress`. The source chain is the wallet's current chain and must be a supported CCTP source; otherwise the wallet is asked to switch.
-2. **Estimate** – `estimateTransfer` asks App Kit for a quote with the Forwarding Service. If the fee would meet or exceed the amount, the user sees an "amount too small" message and no intent is created. If the estimate call fails, Payflow continues without a quote and any error surfaces during the transfer.
+2. **Estimate** – `estimateTransfer` asks App Kit for a quote with the Forwarding Service. App Kit needs a source adapter even for a quote, so Payflow builds a read-only one from the connected wallet; estimating never asks for a signature. The relay fee comes from Circle's API for the exact source → Arc route, so it is known for every supported source chain. Source-chain gas is separate and is shown by the wallet when it asks you to sign. If the fee would meet or exceed the amount, the user sees an "amount too small" message and no intent is created. If the estimate call fails, Payflow continues without a quote and any error surfaces during the transfer.
 3. **Review** – the saved intent is shown with amount, fee and what the recipient receives. Confirming switches the wallet to the source chain if needed and opens Progress.
 4. **Progress** – `executeTransfer` runs the App Kit bridge. The wallet prompts for approval and the burn; the UI shows Preparing → Waiting for wallet → Sending USDC → Settling on Arc → Complete.
 5. **Verify** – App Kit reports success with the mint transaction hash. Payflow reads that transaction's receipt from Arc and requires it to have succeeded before marking the intent complete.
@@ -57,7 +57,9 @@ When a transfer finishes in a non-success state the intent becomes `recoverable`
 
 ## Verified receipt links
 
-On a completed receipt, `Copy verified link` copies `/p/<transaction hash>`. Anyone who opens it gets a read-only page that fetches the receipt from Arc and shows the status, block, time and the USDC transfers in that transaction (largest first; smaller ones are usually fees). If the transaction has no decodable USDC transfer, the page says so and points to the explorer instead of guessing. The link carries only a hash, so it cannot be forged to show a payment that does not exist on Arc.
+On a completed receipt, `Copy verified link` copies `/p/<transaction hash>`. Anyone who opens it gets a read-only page that fetches the receipt from Arc and shows the status, block, time and the USDC transfers in that transaction (largest first; smaller ones are usually fees). If the transaction has no decodable USDC transfer, the page says so and points to the explorer instead of guessing. The link can also carry `?to=<address>` (the receipt adds it automatically). The page then headlines the USDC that address received in the transaction, with any other transfers (typically the relay fee) listed below. The address comes from the link but the amount always comes from Arc: if the transaction contains no transfer to that address, the page says so. Without `?to=`, the page only calls a transfer "Received" when the transaction contains exactly one; otherwise it lists every transfer.
+
+The link carries only a hash and an optional address, so it cannot be forged to show a payment that does not exist on Arc.
 
 ## Payment requests
 

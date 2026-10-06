@@ -1,22 +1,30 @@
 /**
  * /p/:hash — public, read-only payment verification.
  * Anyone with the link sees what Arc itself recorded for that transaction.
+ * Optional ?to=<address> highlights the transfer received by that address; the
+ * amount shown always comes from the chain, never from the link.
  */
 import { useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ExternalLink, ShieldCheck, AlertCircle, Loader2 } from 'lucide-react'
 import PageShell from '@/components/PageShell'
 import { ACTIVE_ARC_CHAIN } from '@/config'
 import { buildTxExplorerUrl } from '@/onchain-facts'
-import { verifyArcPayment, isTxHash, type PaymentVerification } from '@/lib/verify'
+import { formatUsdc } from '@/onchain-money'
+import { verifyArcPayment, isTxHash, type PaymentVerification, type UsdcTransfer } from '@/lib/verify'
 
 const short = (v: string, a = 10, b = 6) => `${v.slice(0, a)}…${v.slice(-b)}`
+const ADDRESS_RE = /^0x[0-9a-fA-F]{40}$/
 
 export default function VerifiedPayment() {
   const { hash } = useParams<{ hash: string }>()
+  const [searchParams] = useSearchParams()
   const navigate = useNavigate()
   const [result, setResult] = useState<PaymentVerification | null>(null)
+
+  const toParam = searchParams.get('to')
+  const payee = toParam && ADDRESS_RE.test(toParam) ? toParam : null
 
   useEffect(() => {
     let cancelled = false
@@ -36,8 +44,28 @@ export default function VerifiedPayment() {
   }, [hash])
 
   const explorerUrl = hash && isTxHash(hash) ? buildTxExplorerUrl(ACTIVE_ARC_CHAIN.id, hash) : null
-  const primary = result?.status === 'confirmed' ? result.transfers[0] : undefined
-  const others = result?.status === 'confirmed' ? result.transfers.slice(1) : []
+
+  // Decide what to headline. Never call something "Received" unless it is unambiguous.
+  let headline: { amount: string; to: string } | null = null
+  let listed: UsdcTransfer[] = []
+  let warning: string | null = null
+  if (result?.status === 'confirmed') {
+    const all = result.transfers
+    if (payee) {
+      const mine = all.filter((t) => t.to.toLowerCase() === payee.toLowerCase())
+      if (mine.length > 0) {
+        headline = { amount: formatUsdc(mine.reduce((sum, t) => sum + t.raw, 0n)), to: payee }
+        listed = all.filter((t) => t.to.toLowerCase() !== payee.toLowerCase())
+      } else {
+        warning = `No USDC transfer to ${short(payee, 8, 4)} was found in this transaction.`
+        listed = all
+      }
+    } else if (all.length === 1 && all[0]) {
+      headline = { amount: all[0].amount, to: all[0].to }
+    } else {
+      listed = all
+    }
+  }
 
   return (
     <PageShell>
@@ -60,25 +88,33 @@ export default function VerifiedPayment() {
             {result?.status === 'confirmed' && (
               <>
                 <div className="mb-5 flex flex-col items-center text-center">
-                  <ShieldCheck className="mb-2 size-9" style={{ color: 'var(--success)' }} />
+                  <ShieldCheck className="mb-2 size-9" style={{ color: warning ? 'var(--danger)' : 'var(--success)' }} />
                   <h1 className="display text-xl font-bold" style={{ color: 'var(--ink)', letterSpacing: '-0.03em' }}>
-                    Verified on {ACTIVE_ARC_CHAIN.name}
+                    {warning ? 'Transaction found on Arc' : `Verified on ${ACTIVE_ARC_CHAIN.name}`}
                   </h1>
                   <p className="mt-1 text-[12px]" style={{ color: 'var(--subtle)' }}>
                     Read directly from the network, not from this link.
                   </p>
                 </div>
 
-                {primary ? (
+                {warning && (
+                  <p className="mb-4 rounded-[14px] px-4 py-3 text-[13px]" style={{ background: 'var(--danger-bg)', color: 'var(--danger)' }} role="alert">
+                    {warning}
+                  </p>
+                )}
+
+                {headline && (
                   <div className="mb-4 rounded-[18px] px-5 py-4" style={{ background: 'rgba(15,28,46,0.03)', border: '1px solid var(--border)' }}>
                     <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.10em]" style={{ color: 'var(--muted)' }}>Received</p>
                     <p className="display text-4xl font-bold tabular-nums" style={{ color: 'var(--ink)', letterSpacing: '-0.04em' }}>
-                      {primary.amount}
+                      {headline.amount}
                       <span className="ml-2 text-xl font-semibold" style={{ color: 'var(--subtle)' }}>USDC</span>
                     </p>
-                    <p className="mono mt-2 break-all text-[11px]" style={{ color: 'var(--ink-2)' }}>to {primary.to}</p>
+                    <p className="mono mt-2 break-all text-[11px]" style={{ color: 'var(--ink-2)' }}>by {headline.to}</p>
                   </div>
-                ) : (
+                )}
+
+                {!headline && !warning && listed.length === 0 && (
                   <p className="mb-4 rounded-[14px] px-4 py-3 text-[13px]" style={{ background: 'rgba(15,28,46,0.03)', border: '1px solid var(--border)', color: 'var(--ink-2)' }}>
                     This transaction succeeded on Arc. Transfer details could not be read from it, so check the explorer for the amounts.
                   </p>
@@ -94,10 +130,24 @@ export default function VerifiedPayment() {
                   )}
                 </div>
 
-                {others.length > 0 && (
-                  <p className="mb-4 text-[11px] leading-relaxed" style={{ color: 'var(--subtle)' }}>
-                    Also in this transaction: {others.map((t) => `${t.amount} USDC to ${short(t.to, 8, 4)}`).join(', ')} (network or relay fees).
-                  </p>
+                {listed.length > 0 && (
+                  <div className="mb-4">
+                    <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.10em]" style={{ color: 'var(--muted)' }}>
+                      {headline ? 'Also in this transaction' : 'USDC transfers in this transaction'}
+                    </p>
+                    <div className="space-y-1">
+                      {listed.map((t, i) => (
+                        <p key={`${t.to}-${i}`} className="mono text-[11px]" style={{ color: 'var(--ink-2)' }}>
+                          {t.amount} USDC → {short(t.to, 8, 6)}
+                        </p>
+                      ))}
+                    </div>
+                    {headline && (
+                      <p className="mt-1.5 text-[11px]" style={{ color: 'var(--subtle)' }}>
+                        Additional transfers are typically the network relay fee.
+                      </p>
+                    )}
+                  </div>
                 )}
               </>
             )}

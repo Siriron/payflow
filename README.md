@@ -55,13 +55,41 @@ It works like sending money through Wise — you see what you send, what the rec
 | **Unified balance** | USDC balances on every supported chain are read in parallel and shown as one total, with a per-chain breakdown sheet. |
 | **Send from any supported chain** | Pick the source chain, enter an amount and an Arc recipient. Payflow handles the route. |
 | **Send directly on Arc** | If your wallet is already on Arc, Payflow sends a plain USDC transfer with no bridge. Gas is paid in USDC. |
-| **Fee before you sign** | The relay fee is estimated up front. If the fee would consume the whole amount, the payment is stopped before anything is created. |
+| **Fee before you sign** | The relay fee is quoted up front from Circle's API (retried once if the first call fails). If the fee would consume the whole amount, the payment is stopped before anything is created. If no quote is available, Review says the fee is deducted from the amount instead of guessing. |
 | **Sign once** | A single wallet flow (approve + burn) on the source chain. The Forwarding Service mints on Arc, so the recipient needs no wallet interaction. |
 | **Resumable payments** | Every payment is a persisted intent with a named state. Stalled payments surface as a banner on Home and a resume action in Activity. Resume never sends twice. |
 | **Payment request links** | Create a self-contained `/r/…` link that pre-fills the amount and your address. The request lives inside the link, so it opens in any browser — no account, no server. |
-| **Receipts and history** | Receipt with explorer links, plus a local Activity list. |
-| **Verified receipt links** | `Copy verified link` on a receipt gives a public `/p/<tx hash>` page. Whoever opens it sees the transaction as Arc recorded it — status, block, time and USDC transfers — read from the network, not from the link. |
+| **Receipts and history** | Receipt with explorer links, plus a local Activity list. For bridged payments the receipt also shows what the recipient actually received on Arc and the relay fee, read from the chain. |
+| **Verified receipt links** | `Copy verified link` on a receipt gives a public `/p/<tx hash>` page. Whoever opens it sees the transaction as Arc recorded it — status, block, time and the USDC transfers, including the amount the recipient received — read from the network, not from the link. |
 | **Light and dark themes** | Persisted per browser. |
+
+---
+
+## Live on Arc mainnet
+
+Payflow is deployed and used on Arc mainnet at [payflow-xyz.vercel.app](https://payflow-xyz.vercel.app). Here is a real payment made through the live app, paid from a payment request link, sent directly on Arc and settled in one transaction:
+
+| | |
+|---|---|
+| **Amount** | 0.05 USDC |
+| **From → To** | `0xB1d2…A8BA` → `0x40ed…43D0` |
+| **Method** | Standard USDC `transfer` on Arc, gas paid in USDC |
+| **Status** | Success, block 24496134, 6 Oct 2026 03:27 UTC |
+| **Gas** | 48,938 gas, about 0.00098 USDC |
+| **Transaction** | [`0xe30afbcf…1e8a4d`](https://explorer.arc.io/tx/0xe30afbcfd55e69c923b9efe1d2c7d989f601d26a6fdf4c6723128cb31e1e8a4d) on Arc Explorer |
+| **Verified receipt** | [payflow-xyz.vercel.app/p/0xe30afbcf…](https://payflow-xyz.vercel.app/p/0xe30afbcfd55e69c923b9efe1d2c7d989f601d26a6fdf4c6723128cb31e1e8a4d), read from Arc, not from the link |
+
+And a cross-chain payment from Base, bridged with CCTP and the Forwarding Service:
+
+| | |
+|---|---|
+| **Sent** | 0.123 USDC from Base |
+| **Recipient received** | 0.104022 USDC on Arc at `0xB1d2…A8BA` |
+| **Relay fee** | 0.018978 USDC, minted to Circle's forwarding fee address in the same transaction and deducted from the amount |
+| **Settlement** | Mint (`receiveMessage` on Circle's MessageTransmitterV2) submitted by Circle's relayer, so the payer needed no gas on Arc |
+| **Status** | Success, block 24496578, 6 Oct 2026 03:31 UTC |
+| **Transaction** | [`0x0c5b283e…2ff22c`](https://explorer.arc.io/tx/0x0c5b283ee3c5d69beeba79822c18a188041739ae1be88440ce16cb92d52ff22c) on Arc Explorer |
+| **Verified receipt** | [payflow-xyz.vercel.app/p/0x0c5b283e…](https://payflow-xyz.vercel.app/p/0x0c5b283ee3c5d69beeba79822c18a188041739ae1be88440ce16cb92d52ff22c?to=0xB1d236988A76b3E978dE66B1c45278C6d17FA8BA) |
 
 ---
 
@@ -305,6 +333,7 @@ Fee estimates are fetched at runtime from Circle App Kit — never hardcoded. US
 
 Payflow runs entirely in the browser with no backend. That keeps it free to host and non-custodial, with these consequences:
 
+- **The relay fee is deducted on arrival and is a visible share of small payments.** In the Base → Arc test above it was 0.018978 USDC on a 0.123 USDC payment. Sending larger amounts makes the fee proportionally smaller. Direct sends on Arc have no relay fee.
 - **Request status is per browser.** A request link works in any browser, because the request is encoded in the link. But "paid" is recorded only in the browser that made the payment, so the same link can be paid more than once and the requester's app does not flip to "paid". The payer can share a verified receipt link, which lets the requester confirm the payment on Arc.
 - **History is per browser.** Activity and receipts are stored in `localStorage` on the device used.
 - **Reload during settlement.** If you reload the page after your USDC was sent but before settlement is confirmed, Payflow will not send again. It shows the source transaction and Circle completes the Arc side automatically; check the explorer if it takes more than a few minutes.

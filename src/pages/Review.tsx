@@ -128,11 +128,11 @@ export default function Review() {
               >
                 <Row
                   label="Recipient receives"
-                  value={intent.recipientAmount ? `${intent.recipientAmount} USDC` : `≈${intent.amount} USDC`}
+                  value={isDirect ? `${intent.amount} USDC` : intent.recipientAmount ? `${intent.recipientAmount} USDC` : 'Amount minus relay fee'}
                 />
                 <Row
                   label="Network fee"
-                  value={isDirect ? 'Paid in USDC gas' : intent.estimatedFee ? `${intent.estimatedFee} USDC` : 'Included in route'}
+                  value={isDirect ? 'Paid in USDC gas' : intent.estimatedFee ? `${intent.estimatedFee} USDC` : 'Deducted from amount'}
                 />
                 <Row label="Destination" value={ACTIVE_ARC_CHAIN.name} />
                 <div className="px-4 py-3">

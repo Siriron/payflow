@@ -122,19 +122,40 @@ export interface EstimateResult {
 
 /**
  * Estimate the CCTP bridge fee without a wallet signature.
- * Uses a dummy address for the from adapter since we just need the fee quote.
+ * The quote (relay fee) comes from Circle's API for the exact source → Arc route,
+ * so it is known for every supported source chain. Source-chain gas is separate:
+ * the wallet shows it when it asks for the signature.
  */
 export async function estimateTransfer(params: {
   sourceChain: string
   amount: string
   recipient: string
+  provider: EIP1193Provider
 }): Promise<EstimateResult> {
-  const { sourceChain, amount, recipient } = params
+  // The fee quote comes from Circle's API and can fail transiently. Try once more
+  // before giving up so the Review screen can show a real fee.
+  const first = await estimateTransferOnce(params)
+  if (first.fee !== null || first.feeExceedsAmount) return first
+  await new Promise((resolve) => setTimeout(resolve, 1000))
+  const second = await estimateTransferOnce(params)
+  return second.fee !== null || second.feeExceedsAmount ? second : first
+}
+
+async function estimateTransferOnce(params: {
+  sourceChain: string
+  amount: string
+  recipient: string
+  provider: EIP1193Provider
+}): Promise<EstimateResult> {
+  const { sourceChain, amount, recipient, provider } = params
   const dest = destinationChain()
 
   try {
+    // App Kit requires a source adapter even for a quote. This one is read-only here:
+    // estimating never asks the wallet to sign anything.
+    const adapter = await createViemAdapterFromProvider({ provider })
     const estimate = await kit.estimateBridge({
-      from: { chain: sourceChain },
+      from: { adapter, chain: sourceChain },
       to: { chain: dest, recipientAddress: recipient, useForwarder: true },
       amount,
     })

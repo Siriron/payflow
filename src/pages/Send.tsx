@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 import { useNavigate, useLocation } from 'react-router-dom'
 import { useAccount, useSwitchChain, useConfig } from 'wagmi'
-import { isAddress } from 'viem'
+import { isAddress, type EIP1193Provider } from 'viem'
 import { motion } from 'framer-motion'
 import { ChevronLeft, Loader2 } from 'lucide-react'
 import PageShell from '@/components/PageShell'
@@ -19,7 +19,7 @@ const fadeUp = {
 export default function Send() {
   const navigate = useNavigate()
   const location = useLocation()
-  const { address, chainId: walletChainId, isConnected } = useAccount()
+  const { address, chainId: walletChainId, isConnected, connector } = useAccount()
   const { switchChainAsync } = useSwitchChain()
   const wagmiConfig = useConfig()
 
@@ -121,10 +121,13 @@ export default function Send() {
     setEstimating(true)
     setAmountError(null)
     try {
+      if (!connector) throw new Error('No wallet connector')
+      const provider = (await connector.getProvider()) as EIP1193Provider
       const est = await estimateTransfer({
         sourceChain: kitChainName,
         amount,
         recipient,
+        provider,
       })
 
       if (est.feeExceedsAmount) {
