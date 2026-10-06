@@ -127,12 +127,12 @@ export default function Review() {
                 style={{ background: 'rgba(15,28,46,0.03)', border: '1px solid var(--border)', borderColor: 'var(--border)' }}
               >
                 <Row
-                  label="Recipient receives"
-                  value={isDirect ? `${intent.amount} USDC` : intent.recipientAmount ? `${intent.recipientAmount} USDC` : 'Amount minus relay fee'}
+                  label={isDirect ? 'Recipient receives' : 'Recipient receives (est.)'}
+                  value={isDirect ? `${intent.amount} USDC` : intent.recipientAmount ? `≈ ${intent.recipientAmount} USDC` : 'Amount minus relay fee'}
                 />
                 <Row
-                  label="Network fee"
-                  value={isDirect ? 'Paid in USDC gas' : intent.estimatedFee ? `${intent.estimatedFee} USDC` : 'Deducted from amount'}
+                  label={isDirect ? 'Network fee' : 'Relay fee (est.)'}
+                  value={isDirect ? 'Paid in USDC gas' : intent.estimatedFee ? `≈ ${intent.estimatedFee} USDC` : 'Deducted from amount'}
                 />
                 <Row label="Destination" value={ACTIVE_ARC_CHAIN.name} />
                 <div className="px-4 py-3">
@@ -142,6 +142,14 @@ export default function Review() {
                   </p>
                 </div>
               </div>
+
+              {!isDirect && (
+                <p className="mt-2 px-1 text-[11px] leading-relaxed" style={{ color: 'var(--subtle)' }}>
+                  {intent.estimatedFee
+                    ? `Estimated from Circle's live quote, which can change. Your receipt shows the exact amounts recorded on Arc. Gas on ${sourceChainName} is separate and shown by your wallet when you sign.`
+                    : `No live quote was available. The relay fee is deducted from the amount on arrival, and your receipt shows the exact amounts. Gas on ${sourceChainName} is separate and shown by your wallet when you sign.`}
+                </p>
+              )}
 
               {/* Route details toggle */}
               <button
