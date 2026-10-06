@@ -55,7 +55,7 @@ It works like sending money through Wise — you see what you send, what the rec
 | **Unified balance** | USDC balances on every supported chain are read in parallel and shown as one total, with a per-chain breakdown sheet. |
 | **Send from any supported chain** | Pick the source chain, enter an amount and an Arc recipient. Payflow handles the route. |
 | **Send directly on Arc** | If your wallet is already on Arc, Payflow sends a plain USDC transfer with no bridge. Gas is paid in USDC. |
-| **Fee before you sign** | The relay fee is quoted up front from Circle's API (retried once if the first call fails). If the fee would consume the whole amount, the payment is stopped before anything is created. If no quote is available, Review says the fee is deducted from the amount instead of guessing. |
+| **Fee before you sign** | The relay fee is quoted up front from Circle's live API (retried once if the first call fails) and shown as an estimate, because Circle's fee can change; the receipt then shows the exact amounts recorded on Arc. If the fee would consume the whole amount, the payment is stopped before anything is created. If no quote is available, Review says the fee is deducted from the amount instead of guessing. |
 | **Sign once** | A single wallet flow (approve + burn) on the source chain. The Forwarding Service mints on Arc, so the recipient needs no wallet interaction. |
 | **Resumable payments** | Every payment is a persisted intent with a named state. Stalled payments surface as a banner on Home and a resume action in Activity. Resume never sends twice. |
 | **Payment request links** | Create a self-contained `/r/…` link that pre-fills the amount and your address. The request lives inside the link, so it opens in any browser — no account, no server. |
@@ -85,8 +85,8 @@ And a cross-chain payment from Base, bridged with CCTP and the Forwarding Servic
 |---|---|
 | **Sent** | 0.123 USDC from Base |
 | **Recipient received** | 0.104022 USDC on Arc at `0xB1d2…A8BA` |
-| **Relay fee** | 0.018978 USDC, minted to Circle's forwarding fee address in the same transaction and deducted from the amount |
-| **Settlement** | Mint (`receiveMessage` on Circle's MessageTransmitterV2) submitted by Circle's relayer, so the payer needed no gas on Arc |
+| **Relay fee** | 0.018978 USDC, minted to a separate fee address (`0xDD86…854B`) in the same transaction and deducted from the amount |
+| **Settlement** | Mint (`receiveMessage` on Circle's MessageTransmitterV2) submitted by the Forwarding Service, so the payer needed no gas on Arc |
 | **Status** | Success, block 24496578, 6 Oct 2026 03:31 UTC |
 | **Transaction** | [`0x0c5b283e…2ff22c`](https://explorer.arc.io/tx/0x0c5b283ee3c5d69beeba79822c18a188041739ae1be88440ce16cb92d52ff22c) on Arc Explorer |
 | **Verified receipt** | [payflow-xyz.vercel.app/p/0x0c5b283e…](https://payflow-xyz.vercel.app/p/0x0c5b283ee3c5d69beeba79822c18a188041739ae1be88440ce16cb92d52ff22c?to=0xB1d236988A76b3E978dE66B1c45278C6d17FA8BA) |
