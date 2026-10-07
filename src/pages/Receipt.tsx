@@ -5,6 +5,7 @@ import { ExternalLink, Copy, Check, Link as LinkIcon } from 'lucide-react'
 import { loadIntent, type PaymentIntent } from '@/lib/intent'
 import { buildTxExplorerUrl } from '@/onchain-facts'
 import { ACTIVE_ARC_CHAIN } from '@/config'
+import { toast } from 'sonner'
 import { markRequestPaid } from '@/lib/requests'
 import { isDirectArcIntent } from '@/lib/kit'
 import { verifyArcPayment } from '@/lib/verify'
@@ -139,7 +140,7 @@ export default function Receipt() {
     void navigator.clipboard.writeText(receiptText).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2400)
-    })
+    }).catch(() => { toast.error('Could not copy. Copy it manually instead.') })
   }, [receiptText])
 
   const copyVerifiedLink = useCallback(() => {
@@ -148,7 +149,7 @@ export default function Receipt() {
     void navigator.clipboard.writeText(url).then(() => {
       setLinkCopied(true)
       setTimeout(() => setLinkCopied(false), 2400)
-    })
+    }).catch(() => { toast.error('Could not copy. Copy it manually instead.') })
   }, [intent])
 
   // Bridged payments: read what the recipient actually received from Arc.

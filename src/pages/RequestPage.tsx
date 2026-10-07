@@ -53,7 +53,7 @@ export function NewRequest() {
       setCopied(true)
       toast.success('Link copied')
       setTimeout(() => setCopied(false), 2000)
-    })
+    }).catch(() => { toast.error('Could not copy. Select the link and copy it manually.') })
   }
 
   return (

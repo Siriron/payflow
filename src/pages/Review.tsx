@@ -6,7 +6,7 @@ import { ChevronLeft, Loader2, ChevronDown, ChevronUp } from 'lucide-react'
 import { loadIntent, type PaymentIntent } from '@/lib/intent'
 import { requireChain } from '@/onchain-facts'
 import { ACTIVE_ARC_CHAIN } from '@/config'
-import { isDirectArcIntent } from '@/lib/kit'
+import { isDirectArcIntent, estimateDirectTransferFee } from '@/lib/kit'
 
 export default function Review() {
   const navigate = useNavigate()
@@ -22,10 +22,19 @@ export default function Review() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showRoute, setShowRoute] = useState(false)
+  const [gasEstimate, setGasEstimate] = useState<string | null>(null)
 
   useEffect(() => {
     if (!intent) { void navigate('/') }
   }, [intent, navigate])
+
+  // Direct Arc transfers have no relay fee, only gas. Estimate it from Arc's RPC.
+  useEffect(() => {
+    if (!intent || !isDirectArcIntent(intent)) return
+    let cancelled = false
+    void estimateDirectTransferFee(intent).then((fee) => { if (!cancelled) setGasEstimate(fee) })
+    return () => { cancelled = true }
+  }, [intent])
 
   if (!intent) return null
 
@@ -131,8 +140,8 @@ export default function Review() {
                   value={isDirect ? `${intent.amount} USDC` : intent.recipientAmount ? `≈ ${intent.recipientAmount} USDC` : 'Amount minus relay fee'}
                 />
                 <Row
-                  label={isDirect ? 'Network fee' : 'Relay fee (est.)'}
-                  value={isDirect ? 'Paid in USDC gas' : intent.estimatedFee ? `≈ ${intent.estimatedFee} USDC` : 'Deducted from amount'}
+                  label={isDirect ? (gasEstimate ? 'Network fee (est.)' : 'Network fee') : 'Relay fee (est.)'}
+                  value={isDirect ? (gasEstimate ? `≈ ${gasEstimate} USDC` : 'Paid in USDC gas') : intent.estimatedFee ? `≈ ${intent.estimatedFee} USDC` : 'Deducted from amount'}
                 />
                 <Row label="Destination" value={ACTIVE_ARC_CHAIN.name} />
                 <div className="px-4 py-3">
@@ -143,13 +152,13 @@ export default function Review() {
                 </div>
               </div>
 
-              {!isDirect && (
-                <p className="mt-2 px-1 text-[11px] leading-relaxed" style={{ color: 'var(--subtle)' }}>
-                  {intent.estimatedFee
+              <p className="mt-2 px-1 text-[11px] leading-relaxed" style={{ color: 'var(--subtle)' }}>
+                {isDirect
+                  ? `Gas is paid in USDC on Arc and shown exactly by your wallet when you sign. Some wallets may show a simulation warning on Arc even though this is a standard USDC transfer to the address above.`
+                  : intent.estimatedFee
                     ? `Estimated from Circle's live quote, which can change. Your receipt shows the exact amounts recorded on Arc. Gas on ${sourceChainName} is separate and shown by your wallet when you sign.`
                     : `No live quote was available. The relay fee is deducted from the amount on arrival, and your receipt shows the exact amounts. Gas on ${sourceChainName} is separate and shown by your wallet when you sign.`}
-                </p>
-              )}
+              </p>
 
               {/* Route details toggle */}
               <button
