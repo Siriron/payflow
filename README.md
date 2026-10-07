@@ -55,13 +55,13 @@ It works like sending money through Wise — you see what you send, what the rec
 | **Unified balance** | USDC balances on every supported chain are read in parallel and shown as one total, with a per-chain breakdown sheet. |
 | **Send from any supported chain** | Pick the source chain, enter an amount and an Arc recipient. Payflow handles the route. |
 | **Send directly on Arc** | If your wallet is already on Arc, Payflow sends a plain USDC transfer with no bridge. Gas is paid in USDC. |
-| **Fee before you sign** | The relay fee is quoted up front from Circle's live API (retried once if the first call fails) and shown as an estimate, because Circle's fee can change; the receipt then shows the exact amounts recorded on Arc. If the fee would consume the whole amount, the payment is stopped before anything is created. If no quote is available, Review says the fee is deducted from the amount instead of guessing. |
+| **Fee before you sign** | The relay fee is quoted up front from Circle's live API (retried once if the first call fails) and shown as an estimate, because Circle's fee can change; the receipt then shows the exact amounts recorded on Arc. If the fee would consume the whole amount, the payment is stopped before anything is created. If no quote is available, Review says the fee is deducted from the amount instead of guessing. Direct Arc sends show an estimated gas fee read from Arc's RPC. |
 | **Sign once** | A single wallet flow (approve + burn) on the source chain. The Forwarding Service mints on Arc, so the recipient needs no wallet interaction. |
 | **Resumable payments** | Every payment is a persisted intent with a named state. Stalled payments surface as a banner on Home and a resume action in Activity. Resume never sends twice. |
 | **Payment request links** | Create a self-contained `/r/…` link that pre-fills the amount and your address. The request lives inside the link, so it opens in any browser — no account, no server. |
 | **Receipts and history** | Receipt with explorer links. Activity lists payments sent from this browser, plus your USDC transfers on Arc (sent and received) read from the Arc Explorer when your wallet is connected, so history survives a cleared browser. For bridged payments the receipt also shows what the recipient actually received on Arc and the relay fee, read from the chain. |
 | **Verified receipt links** | `Copy verified link` on a receipt gives a public `/p/<tx hash>` page. Whoever opens it sees the transaction as Arc recorded it — status, block, time and the USDC transfers, including the amount the recipient received — read from the network, not from the link. |
-| **Light and dark themes** | Persisted per browser. |
+| **Light and dark themes** | Persisted per browser. The layout is phone-first, and wide desktop screens add a product panel beside the app. |
 
 ---
 
@@ -202,6 +202,7 @@ src/
 │   ├── RouteDetails.tsx        # Expandable route info (no bridge jargon)
 │   ├── IntentStatusBanner.tsx  # Recoverable intent alert
 │   ├── MenuButton.tsx          # Header menu: Activity, Request payment
+│   ├── ErrorBoundary.tsx       # Fallback screen if a page fails to render
 │   └── ...                     # Shell, splash, wallet button, logo
 │
 ├── providers/
@@ -337,6 +338,7 @@ Payflow runs entirely in the browser with no backend. That keeps it free to host
 
 - **The relay fee is deducted on arrival and is a visible share of small payments.** In the Base → Arc test above it was 0.018978 USDC on a 0.123 USDC payment. Sending larger amounts makes the fee proportionally smaller. Direct sends on Arc have no relay fee.
 - **Request status is per browser.** A request link works in any browser, because the request is encoded in the link. But "paid" is recorded only in the browser that made the payment, so the same link can be paid more than once and the requester's app does not flip to "paid". The requester can confirm payment from Activity → On Arc, where received USDC transfers appear, or from a verified receipt link the payer shares.
+- **Wallet warnings on Arc.** Some wallets (Rabby, for example) may show a simulation warning for the direct USDC transfer on Arc even though it succeeds. The transaction is a standard ERC-20 `transfer` on Arc's USDC contract, which you can confirm on the explorer.
 - **Local history is per browser.** Payments sent from this browser are kept in `localStorage`, so clearing site data removes that list. The "On Arc" section of Activity is read from the Arc Explorer's public API, so it survives that, but it is best effort: if the explorer is unreachable, the page says so and only local history shows.
 - **Reload during settlement.** If you reload the page after your USDC was sent but before settlement is confirmed, Payflow will not send again. It shows the source transaction and Circle completes the Arc side automatically; check the explorer if it takes more than a few minutes.
 

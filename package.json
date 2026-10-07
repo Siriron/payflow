@@ -1,7 +1,8 @@
 {
   "name": "payflow",
+  "description": "Non-custodial USDC payments on Arc. Send from Ethereum, Base, Arbitrum, Avalanche or Optimism, or directly on Arc.",
   "private": true,
-  "version": "0.0.0",
+  "version": "1.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -44,5 +45,21 @@
     "typescript": "~7.0.2",
     "vite": "^6.0.5",
     "vite-plugin-node-polyfills": "^0.22.0"
-  }
+  },
+  "license": "MIT",
+  "author": "Siriron",
+  "homepage": "https://payflow-xyz.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Siriron/payflow.git"
+  },
+  "keywords": [
+    "arc",
+    "usdc",
+    "circle",
+    "cctp",
+    "payments",
+    "web3",
+    "stablecoin"
+  ]
 }

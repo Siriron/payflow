@@ -3,7 +3,7 @@
   "configVersion": 1,
   "workspaces": {
     "": {
-      "name": "studio-app",
+      "name": "payflow",
       "dependencies": {
         "@circle-fin/adapter-viem-v2": "^1.19.0",
         "@circle-fin/app-kit": "^1.16.0",
