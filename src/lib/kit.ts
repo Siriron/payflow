@@ -14,7 +14,7 @@ import { type PaymentIntent, transition, updateIntent } from './intent'
 import { parsePayflowError } from './errors'
 import { ACTIVE_ARC_CHAIN } from '../config'
 import { getUsdc } from '../onchain-facts'
-import { Amount } from '../onchain-money'
+import { Amount, formatUsdc } from '../onchain-money'
 
 // ---------------------------------------------------------------------------
 // Types
@@ -274,6 +274,38 @@ function msgAlreadySent(sourceTxHash: string): string {
 /** True when the payer is already on Arc, so USDC moves with a plain ERC-20 transfer. */
 export function isDirectArcIntent(intent: Pick<PaymentIntent, 'sourceChainId'>): boolean {
   return intent.sourceChainId === ACTIVE_ARC_CHAIN.id
+}
+
+/**
+ * Estimated network fee for a direct USDC transfer on Arc, as a decimal USDC string
+ * (gas used × current gas price, rounded up to 6 decimals). Returns null if Arc's RPC
+ * cannot produce an estimate; the caller then shows no number rather than guessing.
+ */
+export async function estimateDirectTransferFee(
+  intent: Pick<PaymentIntent, 'payer' | 'recipient' | 'amount'>,
+): Promise<string | null> {
+  try {
+    const usdc = getUsdc(ACTIVE_ARC_CHAIN.id)
+    if (!usdc) return null
+    const value = Amount.parse(intent.amount, usdc.decimals).raw
+    const client = createPublicClient({ chain: ACTIVE_ARC_CHAIN, transport: http() })
+    const [gas, gasPrice] = await Promise.all([
+      client.estimateContractGas({
+        address: usdc.address as `0x${string}`,
+        abi: erc20Abi,
+        functionName: 'transfer',
+        args: [intent.recipient as `0x${string}`, value],
+        account: intent.payer as `0x${string}`,
+      }),
+      client.getGasPrice(),
+    ])
+    const total = gas * gasPrice // in the native token's smallest unit
+    const extraDecimals = Math.max(ACTIVE_ARC_CHAIN.nativeCurrency.decimals - usdc.decimals, 0)
+    const scale = 10n ** BigInt(extraDecimals)
+    return formatUsdc((total + scale - 1n) / scale)
+  } catch {
+    return null
+  }
 }
 
 /**
