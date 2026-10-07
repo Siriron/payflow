@@ -11,7 +11,7 @@
 
 ## Direct transfer on Arc
 
-If the connected wallet is already on Arc, there is nothing to bridge. Send skips the fee estimate and Review shows "Paid in USDC gas" instead of a relay fee. On confirm, Payflow signs one ERC-20 `transfer` on the Arc USDC contract (6-decimal amounts), moves the intent to `settling` once the hash exists, and applies the same completion rule: the receipt is read from Arc and must have succeeded. If Arc cannot confirm the receipt in time the intent becomes `recoverable`, and resuming only re-checks that hash — it never sends again.
+If the connected wallet is already on Arc, there is nothing to bridge. Send skips the bridge fee quote. Review shows an estimated network fee read from Arc's RPC (gas used × current gas price; if the RPC cannot estimate it, just "Paid in USDC gas") instead of a relay fee, and the wallet shows the exact gas when you sign. Some wallets may show a simulation warning on Arc even though this is a standard USDC transfer; the transaction can be inspected on the explorer. On confirm, Payflow signs one ERC-20 `transfer` on the Arc USDC contract (6-decimal amounts), moves the intent to `settling` once the hash exists, and applies the same completion rule: the receipt is read from Arc and must have succeeded. If Arc cannot confirm the receipt in time the intent becomes `recoverable`, and resuming only re-checks that hash — it never sends again.
 
 ## Intent states
 

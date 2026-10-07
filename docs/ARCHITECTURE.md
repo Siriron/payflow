@@ -31,6 +31,10 @@ onchain-*.ts  Chain facts and USDC math
 
 `vercel.json` rewrites all paths to `index.html` so client-side routes survive a refresh.
 
+### Layout
+
+Phone-first. On phones `PageShell` renders the app full-width. From 768px it becomes a centered card on a dot-grid background; from 1024px it also shows a product panel (what Payflow is, three steps, links) beside the card. Review and Progress use their own centered sheet. `ErrorBoundary` wraps the app and shows a reload screen if a page throws while rendering.
+
 ### `config.ts`
 
 Reads `VITE_USE_MAINNET`. When `'true'` the destination is Arc and sources are Ethereum, Base, Arbitrum, Avalanche and Optimism. Otherwise the destination is Arc Testnet and sources are the matching testnets. The wagmi config registers transports for all chains regardless, and uses the `injected()` connector only.
@@ -44,6 +48,7 @@ The only module that imports `@circle-fin/app-kit`. It exposes:
 - `retryTransfer({ intent, provider })` – resumes a recoverable payment: re-verifies a known Arc hash, resumes the live SDK result in the same session, and never re-bridges after a reload (see [PAYMENT_FLOW.md](PAYMENT_FLOW.md#recovery)).
 - `verifyArcMint` (internal) – reads the mint transaction receipt from the Arc RPC; a payment completes only if it succeeded.
 - `isDirectArcIntent` / direct transfer – when the payer's wallet is already on Arc (`sourceChainId` equals the Arc chain ID), `executeTransfer` skips App Kit and sends a standard ERC-20 `transfer` on the Arc USDC contract, signed in the wallet. Gas is paid in USDC. The transaction receipt is then verified like any other payment.
+- `estimateDirectTransferFee` – gas estimate for a direct Arc transfer from Arc's RPC, rounded up to 6 decimals; `null` if the RPC cannot estimate.
 - `CHAIN_ID_TO_KIT_NAME` – maps numeric chain IDs to App Kit chain names.
 
 The destination uses `useForwarder: true`, so Circle's forwarding service mints on Arc and no destination wallet or adapter is needed.
