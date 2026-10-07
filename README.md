@@ -79,6 +79,18 @@ Payflow is deployed and used on Arc mainnet at [payflow-xyz.vercel.app](https://
 | **Transaction** | [`0xe30afbcf…1e8a4d`](https://explorer.arc.io/tx/0xe30afbcfd55e69c923b9efe1d2c7d989f601d26a6fdf4c6723128cb31e1e8a4d) on Arc Explorer |
 | **Verified receipt** | [payflow-xyz.vercel.app/p/0xe30afbcf…](https://payflow-xyz.vercel.app/p/0xe30afbcfd55e69c923b9efe1d2c7d989f601d26a6fdf4c6723128cb31e1e8a4d), read from Arc, not from the link |
 
+A second direct transfer on Arc, made on 7 Oct 2026:
+
+| | |
+|---|---|
+| **Amount** | 0.123 USDC |
+| **From → To** | `0x40ed…43D0` → `0xB1d2…A8BA` |
+| **Method** | Standard USDC `transfer` on Arc, gas paid in USDC |
+| **Status** | Success, block 24663799, 7 Oct 2026 03:05 UTC |
+| **Gas** | about 0.000979 USDC |
+| **Transaction** | [`0x92a4c74d…bb88d`](https://explorer.arc.io/tx/0x92a4c74d4cf64ead0c08a958b3592b50efed76e68cc2b321e96f2ad48a7bb88d) on Arc Explorer |
+| **Verified receipt** | [payflow-xyz.vercel.app/p/0x92a4c74d…](https://payflow-xyz.vercel.app/p/0x92a4c74d4cf64ead0c08a958b3592b50efed76e68cc2b321e96f2ad48a7bb88d?to=0xB1d236988A76b3E978dE66B1c45278C6d17FA8BA) |
+
 And a cross-chain payment from Base, bridged with CCTP and the Forwarding Service:
 
 | | |
