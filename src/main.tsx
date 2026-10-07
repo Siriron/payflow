@@ -4,16 +4,19 @@ import { Toaster } from 'sonner'
 import { Web3Provider } from './providers/Web3Provider'
 import { ThemeProvider } from './providers/ThemeProvider'
 import App from './App'
+import ErrorBoundary from './components/ErrorBoundary'
 import './index.css'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <ThemeProvider>
-      <Web3Provider>
-        <App />
-        <Toaster position="top-center" richColors />
-      </Web3Provider>
-    </ThemeProvider>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <Web3Provider>
+          <App />
+          <Toaster position="top-center" richColors />
+        </Web3Provider>
+      </ThemeProvider>
+    </ErrorBoundary>
   </StrictMode>,
 )
 
